@@ -1,0 +1,24 @@
+service-name: discord-dungeon-master-service
+
+server:
+  host: localhost
+  port: 8001
+
+database:
+  host: localhost
+  port: 35432
+  db-name: ai_dnd_db
+  username: postgres
+  password: postgres
+
+gemini-model: "gemini-3.1-flash-lite-preview"
+# channel-id: "1483049792648249374"
+channel-id: "1483099164576317631"
+
+dm-id: "1483098634601107476"
+
+self-discord-id: "1480559490481782845"
+
+buffered-message-expiry-seconds: 5
+
+buffer-check-interval-seconds: 2

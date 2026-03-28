@@ -1,0 +1,277 @@
+---
+source: src/character/service.rs
+expression: character_json
+---
+{
+  "abilitiesBlock": {
+    "abilities": {
+      "CHARISMA": {
+        "base": 17,
+        "modifier": 3
+      },
+      "CONSTITUTION": {
+        "base": 14,
+        "modifier": 2
+      },
+      "DEXTERITY": {
+        "base": 14,
+        "modifier": 2
+      },
+      "INTELLIGENCE": {
+        "base": 10,
+        "modifier": 0
+      },
+      "STRENGTH": {
+        "base": 8,
+        "modifier": -1
+      },
+      "WISDOM": {
+        "base": 11,
+        "modifier": 0
+      }
+    }
+  },
+  "combat": {
+    "actions": [
+      {
+        "maxUseTime": null,
+        "name": "Attack",
+        "usedTime": null
+      },
+      {
+        "maxUseTime": null,
+        "name": "Dash",
+        "usedTime": null
+      },
+      {
+        "maxUseTime": null,
+        "name": "Disengage",
+        "usedTime": null
+      }
+    ],
+    "armorClass": 15,
+    "combatActions": [
+      {
+        "damage": "1d4+2",
+        "hitDc": 4,
+        "name": "Dagger"
+      },
+      {
+        "damage": "1d4+2",
+        "hitDc": 4,
+        "name": "Dagger"
+      },
+      {
+        "damage": "1d8",
+        "hitDc": 5,
+        "name": "Ray of Front"
+      },
+      {
+        "damage": "0",
+        "hitDc": 1,
+        "name": "Unarmed Strike"
+      }
+    ],
+    "conditions": [],
+    "defenses": {
+      "immunities": [],
+      "resistance": [
+        "Necrotic",
+        "Radiant"
+      ],
+      "vulnerabilities": []
+    },
+    "exhaustionLevel": 0,
+    "hitPoints": 16,
+    "initiative": 2,
+    "savingThrows": {
+      "proficiency": [
+        "CONSTITUTION",
+        "CHARISMA"
+      ],
+      "savingSets": {
+        "CHARISMA": 5,
+        "CONSTITUTION": 4,
+        "DEXTERITY": 2,
+        "INTELLIGENCE": 0,
+        "STRENGTH": -1,
+        "WISDOM": 0
+      }
+    },
+    "senses": [
+      {
+        "name": "Darkvision",
+        "value": "60 ft"
+      }
+    ],
+    "speed": [
+      {
+        "name": "Walking",
+        "value": "30 ft"
+      }
+    ]
+  },
+  "identity": {
+    "characterName": "真珠",
+    "characteristics": {
+      "age": 28,
+      "alignment": "Lawful neutral",
+      "appearanceTrait": [],
+      "background": "Noble",
+      "backgroundFeature": "Position of Privilege",
+      "backgroundFeatureDescription": "Thanks to your noble birth, people are inclined to think the best of you. You are welcome in high society, and people assume you have the right to be wherever you are. The common folk make every effort to accommodate you and avoid your displeasure, and other people of high birth treat you as a member of the same social sphere. You can secure an audience with a local noble if you need to.",
+      "bonds": "The common folk must see me as a hero of the people.",
+      "eyes": "Blue",
+      "faith": "Amber Lord",
+      "flaws": "I too often hear veiled insults and threats in every word addressed to me, and I'm quick to anger.",
+      "gender": "Female",
+      "hair": "Blonde",
+      "height": "5'7″",
+      "ideals": "Responsibility. It is my duty to respect the authority of those above me, just as those below me must respect mine. (Lawful)",
+      "personalityTraits": "My eloquent flattery makes everyone I talk to feel like the most wonderful and important person in the world.",
+      "size": "Medium",
+      "skin": "White",
+      "weight": "104 lbs."
+    },
+    "class": "Sorcerer",
+    "species": "Aasimar",
+    "subClass": "Draconic Bloodline - Gold",
+    "subSpecies": null
+  },
+  "inventory": {
+    "items": [
+      {
+        "costGp": 15,
+        "equiped": false,
+        "name": "Clothes, Fine",
+        "quantity": 1,
+        "weight": 6
+      },
+      {
+        "costGp": 2,
+        "equiped": true,
+        "name": "Dagger",
+        "quantity": null,
+        "weight": 1
+      }
+    ]
+  },
+  "magic": {
+    "spells": {
+      "abilityModifier": 3,
+      "abilityType": "CHARISMA",
+      "saveDc": 13,
+      "spellAttack": 5,
+      "spellSlots": [
+        {
+          "level": 1,
+          "slot": 3,
+          "used": 0
+        }
+      ],
+      "spells": [
+        {
+          "castTime": "1 action",
+          "effect": "Creation",
+          "hitDc": 13,
+          "level": 0,
+          "name": "Light",
+          "range": "Touch"
+        },
+        {
+          "castTime": "1 action",
+          "effect": "1d4+1",
+          "hitDc": null,
+          "level": 1,
+          "name": "Magic Missile",
+          "range": "120 ft"
+        }
+      ]
+    }
+  },
+  "meta": {
+    "actionEndTime": "Harptos 24 Mar 1555 12:35PM",
+    "dead": false,
+    "discordId": "400114655500042240",
+    "extraCreatures": [],
+    "location": "Tavern",
+    "performingAction": "Drinking",
+    "storySummary": "Just started to join the game"
+  },
+  "notes": {
+    "allies": null,
+    "backstory": "Pearl is a rank P45 senior manager of the Strategic Investment Department in the Interastral Peace Corporation, a member of the Ten Stonehearts, the leader of Pearluxe Corp, and the CEO of Planarcadia.",
+    "enemies": null,
+    "organizations": null,
+    "other": null
+  },
+  "progression": {
+    "level": 2,
+    "maxHp": 16,
+    "proficiencies": {
+      "armor": [],
+      "languages": [
+        "Celestial",
+        "Common",
+        "Draconic"
+      ],
+      "proficiencyBonus": 2,
+      "tools": [
+        "Dragonchess Set",
+        "Painter's Supplies"
+      ],
+      "weapons": [
+        "Crossbow",
+        "Dagger",
+        "Dart",
+        "Light",
+        "Quarterstaff",
+        "Sling"
+      ]
+    },
+    "totalHitDice": "2d8",
+    "xp": 330
+  },
+  "skillsBlock": {
+    "skills": {
+      "skills": {
+        "ACROBATICS": {
+          "bonus": 2,
+          "modifier": "DEXTERITY",
+          "passive": 12,
+          "prof": false
+        },
+        "ANIMAL_HANDLING": {
+          "bonus": 0,
+          "modifier": "WISDOM",
+          "passive": 10,
+          "prof": false
+        },
+        "ARCANA": {
+          "bonus": 2,
+          "modifier": "INTELLIGENCE",
+          "passive": 12,
+          "prof": true
+        }
+      }
+    }
+  },
+  "traits": {
+    "featuresAndTraits": [
+      {
+        "cooldown": null,
+        "description": "At 1st level, you choose one type of dragon as your ancestor. The damage type associated with each dragon is used by features you gain later.\nYou can speak, read, and write Draconic. Additionally, whenever you make a Charisma check when interacting with dragons, your proficiency bonus is doubled if it applies to the check.",
+        "duration": null,
+        "name": "Dragon Ancestor",
+        "trigger": null
+      },
+      {
+        "cooldown": null,
+        "description": "Charisma is your spellcasting ability for your sorcerer spells, since the power of your magic relies on your ability to project your will into the world. You use your Charisma whenever a spell refers to your spellcasting ability. In addition, you use your Charisma modifier when setting the saving throw DC for a sorcerer spell you cast and when making an attack roll with one.\n\nSpell save DC = 8 + your proficiency bonus + your Charisma modifier\n\nSpell attack modifier = your proficiency bonus + your Charisma modifier",
+        "duration": null,
+        "name": "Spellcasting Ability",
+        "trigger": null
+      }
+    ]
+  }
+}

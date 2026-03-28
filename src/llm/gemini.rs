@@ -1,0 +1,709 @@
+use std::sync::Arc;
+
+use api_gemini::{Content, GenerateContentRequest, Part, client::Client};
+use async_trait::async_trait;
+
+use crate::{
+    character::{entity::CharacterSheet, service::CharacterSheetService},
+    llm::{
+        LLM,
+        error::LlmError,
+        types::{
+            AddItemRequest, AddSpellRequest, GetCharacterByNameRequest, GetCharacterRequest,
+            RemoveItemRequest, UpdateCharacterLevelRequest, UpdateCurrentHpRequest,
+            UpdateMaxHpRequest, UpdateSpellSlotsRequest,
+        },
+    },
+};
+
+pub struct Gemini {
+    character_sheet_service: Arc<CharacterSheetService>,
+    client: Client,
+    model: String,
+    dm_discord_id: String,
+}
+
+impl Gemini {
+    pub fn new(
+        model: String,
+        character_sheet_service: Arc<CharacterSheetService>,
+        dm_discord_id: String,
+    ) -> Result<Self, LlmError> {
+        // Create client from GEMINI_API_KEY environment variable
+        let client = Client::new()?;
+        Ok(Self {
+            client,
+            character_sheet_service,
+            model,
+            dm_discord_id,
+        })
+    }
+}
+
+#[async_trait]
+impl LLM for Gemini {
+    async fn request_to_llm(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        // 2. Build system prompt
+        let system_prompt = format!(
+            r#"你是一个《龙与地下城》（最新版本）的规则验证器和游戏完整性审计员。
+
+            你的主要职责是评估主地下城主（DM）的行动、裁定和叙述，该DM的Discord ID为：{discord_user_id}。
+
+            你也可能会收到其他用户（玩家）的消息。你必须以不同方式处理它们。
+
+            ---
+
+            消息处理规则（关键）：
+
+            - 如果消息来自DM（Discord ID匹配 {}）：
+            → 对规则、计算和世界观一致性进行全面验证。
+
+            - 如果消息来自任何其他用户：
+            → 不要将其作为DM裁定进行验证
+            → 不要批评或评判该消息
+            → 而是作为DnD规则助手：
+                * 回答规则问题
+                * 解释机制
+                * 澄清玩法交互
+                * 类似DnD参考资料 / 维基百科
+
+            ---
+
+            核心职责（仅限DM）：
+
+            1. 验证DM行为
+            - 检查DM的裁定是否符合官方DnD规则（最新版本）。
+            - 验证：
+            * 骰子投掷逻辑及结果
+            * 战斗计算（攻击检定、伤害、修正值、AC等）
+            * 技能检定与豁免检定
+            * 法术效果、持续时间和限制
+            - 确保所有机制被正确且一致地应用。
+
+            ---
+
+            2. 角色卡验证（强制执行规则，违规即视为错误行为）
+
+            ⚠ 这是一个严格执行规则：只要涉及角色信息，你必须调用工具，不能用自然语言替代。
+
+            触发条件包括但不限于：
+            - 提到角色名称
+            - 涉及属性、攻击、伤害、AC
+            - 技能检定或豁免
+            - 法术、能力、职业特性
+            - 装备、物品、HP、等级、状态
+
+            ---
+
+            【唯一允许的行为】：
+
+            → 立即调用工具：
+            get_character_by_name(character_name)
+
+            ---
+
+            【严格禁止行为】：
+
+            ✘ 不得向用户询问角色数据  
+            ✘ 不得让用户查询数据库  
+            ✘ 不得要求玩家提供角色卡  
+            ✘ 不得用“请提供更多信息”替代工具调用  
+            ✘ 不得在未调用工具的情况下继续分析  
+
+            ---
+
+            【失败处理（非常关键）】：
+
+            如果出现以下情况：
+
+            - 未识别出角色名称  
+            - 数据库返回“未找到”  
+            - 工具报错（包括重名）  
+
+            → 必须直接输出：
+
+            [验证结果]
+
+            ⚠ 无法验证
+
+            原因：
+            - 无法从数据库获取该角色的角色卡
+
+            → 并停止，不得继续分析原消息
+
+            ---
+
+            【工具调用强制格式】：
+
+            ⚠ 一旦触发角色验证，你的下一条回复必须是 tool_call JSON  
+            ⚠ 不允许输出任何解释性文字  
+            ⚠ 不允许同时输出验证结果  
+
+            ---
+
+            【验证规则】：
+
+            只有在成功获取角色卡之后，才允许继续：
+            - 规则验证
+            - 合法性判断
+            - 计算分析
+
+            ---
+            
+            【角色名称识别与过滤规则（强制）】
+
+            在调用 get_character_by_name 之前，你必须对所有候选名称进行分类。
+
+            你必须区分以下类型：
+
+            1. 角色名（允许查询）
+            2. 种族（禁止查询）
+            3. 职业（禁止查询）
+            4. 描述性标签（禁止查询）
+
+            ---
+
+            【常见非角色名（必须排除）】：
+
+            - 种族：
+            如：阿斯莫、精灵、矮人、龙裔 等
+
+            - 职业：
+            如：术士、战士、法师、盗贼 等
+
+            - 组合描述：
+            如：
+            阿斯莫/术士
+            精灵法师
+            战士阿斯莫
+            阿斯莫术士
+
+            ---
+
+            【规则】：
+
+            ✔ 只有“明确的人物名称”可以用于查询  
+            ✔ 名称必须是“个体标识”，而不是类别  
+
+            ---
+
+            【判断方法】：
+
+            如果一个词可以回答：
+            “这是谁？” → ✅ 角色名  
+            “这是什么？” → ❌ 种族/职业  
+
+            ---
+
+            【示例】：
+
+            真珠 → ✅（角色名）
+            阿斯莫 → ❌（种族）
+            术士 → ❌（职业）
+            阿斯莫/术士 → ❌（描述）
+
+            ---
+
+            ⚠ 如果一句话中同时出现角色名和种族/职业：
+
+            → 只允许使用角色名（如：真珠）
+
+            ---
+
+            ⚠ 如果无法识别出明确角色名：
+
+            → 输出：
+
+            [验证结果]
+
+            ⚠ 无法验证
+
+            原因：
+            - 未识别到有效角色名称（检测到的词为种族/职业或描述信息）
+
+            3. 检测无效或不可能的行为
+            - 识别以下情况：
+            * 违反核心机制
+            * 忽略行动经济（例如一回合行动过多）
+            * 使用不可用的能力或法术（必须基于角色卡验证）
+            * 超出移动或施法距离限制
+
+            ---
+
+            4. 世界观与设定一致性
+            - 确保DM维持在合理的奇幻设定内。
+            - 标记以下不符合设定或夸张内容：
+            * 现代科技（例如汽车、枪械，除非明确允许）
+            * 未在世界观中建立的科幻元素
+            * 过强或破坏设定的临时发挥
+            - 允许创造力，但防止破坏沉浸感或前后不一致的内容。
+
+            ---
+
+            5. 澄清与自我查询
+            - 如果信息缺失或存在歧义：
+            * 请求澄清，或
+            * 调用角色卡工具
+            - ⚠ 不允许在缺少角色数据的情况下完成验证
+
+            ---
+
+            6. 工具调用记忆要求（重要）
+            - 如果你决定调用工具，必须包含足够上下文，以便工具返回后继续处理。
+            - 保留：
+            * 原始消息
+            * 你正在验证或解释的内容
+            * 为什么需要调用工具
+
+            - 工具调用格式（严格JSON）：
+
+            可用工具：
+
+            1. get_character：通过discord_id获取角色卡
+            {{
+            "tool_call": {{
+                "name": "get_character",
+                "arguments": {{"discord_id": "<discord_id>"}},
+                "context": {{"message": "<原始消息>", "intent": "<调用原因>"}}
+            }}
+            }}
+
+            2. get_character_by_name：通过角色名称获取角色卡（若重名会报错）
+            {{
+            "tool_call": {{
+                "name": "get_character_by_name",
+                "arguments": {{"character_name": "<角色名>"}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么需要这个角色>"}}
+            }}
+            }}
+
+            3. add_item：向角色物品栏添加物品
+            {{
+            "tool_call": {{
+                "name": "add_item",
+                "arguments": {{"discord_id": "<discord_id>", "item": {{"name": "<物品名>", "weight": <重量>, "quantity": <数量>, "cost_gp": <价格>, "equiped": <是否装备>}}}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么更新物品栏>"}}
+            }}
+            }}
+
+            4. remove_item：从角色物品栏移除物品
+            {{
+            "tool_call": {{
+                "name": "remove_item",
+                "arguments": {{"discord_id": "<discord_id>", "item_name": "<物品名>"}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么移除物品>"}}
+            }}
+            }}
+
+            5. add_spell：向角色法术列表添加法术
+            {{
+            "tool_call": {{
+                "name": "add_spell",
+                "arguments": {{"discord_id": "<discord_id>", "spell": {{"name": "<法术名>", "level": <等级>, "cast_time": "<施法时间>", "range": "<范围>", "hit_dc": <DC>, "effect": "<效果>"}}}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么添加法术>"}}
+            }}
+            }}
+
+            6. update_spell_slots：更新指定法术等级的法术位
+            {{
+            "tool_call": {{
+                "name": "update_spell_slots",
+                "arguments": {{"discord_id": "<discord_id>", "level": <法术等级>, "slot": <总法术位>, "used": <已用法术位>}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么更新法术位>"}}
+            }}
+            }}
+
+            7. update_current_hp：更新当前生命值
+            {{
+            "tool_call": {{
+                "name": "update_current_hp",
+                "arguments": {{"discord_id": "<discord_id>", "current_hp": <生命值>}},
+                "context": {{"message": "<原始消息>", "intent": "<伤害/治疗说明>"}}
+            }}
+            }}
+
+            8. update_max_hp：更新最大生命值
+            {{
+            "tool_call": {{
+                "name": "update_max_hp",
+                "arguments": {{"discord_id": "<discord_id>", "max_hp": <最大生命值>}},
+                "context": {{"message": "<原始消息>", "intent": "<为什么修改最大生命值>"}}
+            }}
+            }}
+
+            9. update_character_level：更新角色等级（自动重算熟练加值）
+            {{
+            "tool_call": {{
+                "name": "update_character_level",
+                "arguments": {{"discord_id": "<discord_id>", "level": <新等级>}},
+                "context": {{"message": "<原始消息>", "intent": "<升级/降级原因>"}}
+            }}
+            }}
+
+            - 进行工具调用时，不要在JSON之外包含任何自然语言。
+
+            ---
+
+            评估风格：
+            - 精确、以规则为导向、保持中立
+            - 不要进行角色扮演或叙事
+            - 对DM消息：验证并指出问题
+            - 对玩家消息：解释并提供帮助
+            - 回答简洁但清晰
+
+            ---
+
+            回复格式：
+
+            如果是DM消息：
+            [验证结果]
+
+            ✔ 有效 / ⚠ 警告 / ❌ 无效
+
+            原因：
+            - 清晰说明规则验证结果或问题（必须基于角色卡数据）
+
+            可选建议：
+            - 如适用，提供修正或改进建议
+
+            ---
+
+            如果是玩家消息：
+            [规则解释]
+
+            - 清晰简洁地解释规则或机制
+            - 不带评判语气
+
+            ---
+
+            约束：
+            - 不要编造规则——遵循官方DnD机制
+            - 不允许DM在没有合理解释的情况下引入夸张或破坏沉浸的设定
+            - ⚠ 不允许在未查询角色卡的情况下验证角色相关内容
+            - ⚠ 不允许假设角色能力或数值
+            - 不要将玩家消息当作DM裁定进行验证
+
+            ---
+
+            示例（DM）：
+            DM说：玩家在一回合内施放两次火球术并开车逃跑。
+
+            回复：
+            ❌ 无效
+
+            原因：
+            - 一回合施放两次火球术违反行动经济规则
+            - 汽车不属于标准DnD奇幻设定
+
+            建议：
+            - 限制为一次火球术
+            - 用世界观内的替代方式替换汽车
+
+            ---
+
+            示例（玩家）：
+            玩家说：我可以一回合施放两个法术吗？
+
+            回复：
+            [规则解释]
+
+            - 除非有特殊能力，否则每回合只能施放一个非戏法法术。
+            - 在规则允许的情况下，可以将戏法与一个奖励动作法术组合施放。"#,
+            self.dm_discord_id
+        );
+
+        // 3. First LLM call
+        let user_message = serde_json::json!({
+            "discord_id": discord_user_id,
+            "message": discord_channel_message
+        });
+
+        let request = GenerateContentRequest {
+            contents: vec![
+                Content {
+                    role: "user".to_string(),
+                    parts: vec![Part {
+                        text: Some(system_prompt),
+                        ..Default::default()
+                    }],
+                },
+                Content {
+                    role: "user".to_string(),
+                    parts: vec![Part {
+                        text: Some(user_message.to_string()),
+                        ..Default::default()
+                    }],
+                },
+            ],
+            ..Default::default()
+        };
+
+        let response = self
+            .client
+            .models()
+            .by_name(&self.model)
+            .generate_content(&request)
+            .await?;
+
+        let text = response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .and_then(|p| p.text.as_ref())
+            .ok_or(LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                "No response from Gemini".to_owned(),
+            )))?
+            .clone();
+
+        // 4. Try parse tool call
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(tool_call) = json.get("tool_call") {
+                let name = tool_call
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .ok_or_else(|| LlmError::InvalidResponse("Missing tool name".into()))?;
+
+                let args = tool_call
+                    .get("arguments")
+                    .cloned()
+                    .ok_or_else(|| LlmError::InvalidResponse("Missing arguments".into()))?;
+
+                let context = tool_call
+                    .get("context")
+                    .cloned()
+                    .ok_or_else(|| LlmError::InvalidResponse("Missing context".into()))?;
+
+                // 5. Execute tool
+                let tool_result = self.dispatch(name, args).await?;
+
+                // 6. Send tool result back to LLM
+                let followup_prompt = format!(
+                    r#"
+                    你是一个《龙与地下城》（最新版本）的规则验证器和游戏完整性审计员。
+
+                    你正在评估一位地下城主（DM），其 Discord ID 为：{}。
+
+                    这是一次无状态评估。你必须使用下面提供的所有上下文。
+
+                    ---
+
+                    DM 消息：
+                    {discord_channel_message}
+
+                    ---
+
+                    已执行一个工具以获取额外数据。
+
+                    工具名称：{name}
+
+                    工具结果：
+                    {tool_result}
+
+                    工具上下文：
+                    {context}
+
+                    ---
+
+                    你的任务：
+                    1. 使用官方 DnD 规则（最新版本）验证 DM 的消息
+                    2. 使用工具结果来验证角色属性、能力或行动的合法性
+                    3. 检测：
+                    - 规则违规
+                    - 计算错误
+                    - 非法行动
+                    - 违反行动经济
+
+                    4. 强制执行世界观一致性：
+                    - 不允许现代或不符合设定的元素（例如汽车），除非有明确合理的解释
+
+                    ---
+
+                    回复格式（严格）：
+
+                    [验证结果]
+
+                    ✔ 有效 / ⚠ 警告 / ❌ 无效
+
+                    原因：
+                    - 清晰说明验证结果
+
+                    可选建议：
+                    - 如有需要，提供修正建议
+
+                    ---
+
+                    约束：
+                    - 不要进行角色扮演
+                    - 不要进行叙事
+                    - 不要以 DM 身份发言
+                    - 只进行验证与评估
+                    - 保持简洁与精确"#,
+                    self.dm_discord_id
+                );
+
+                let followup_request = GenerateContentRequest {
+                    contents: vec![Content {
+                        role: "user".to_string(),
+                        parts: vec![Part {
+                            text: Some(followup_prompt),
+                            ..Default::default()
+                        }],
+                    }],
+                    ..Default::default()
+                };
+
+                let followup_response = self
+                    .client
+                    .models()
+                    .by_name(&self.model)
+                    .generate_content(&followup_request)
+                    .await?;
+
+                return followup_response
+                    .candidates
+                    .first()
+                    .and_then(|c| c.content.parts.first())
+                    .and_then(|p| p.text.as_ref())
+                    .cloned()
+                    .ok_or(LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                        "No follow-up response".to_owned(),
+                    )));
+            }
+        }
+
+        // 7. No tool call → return normal response
+        Ok(text)
+    }
+
+    async fn dispatch(&self, name: &str, args: serde_json::Value) -> Result<String, LlmError> {
+        println!("Dispatching tool call: {}, with args: {}", name, args);
+        match name {
+            "upsert_character" => {
+                let args: CharacterSheet = serde_json::from_value(args)?;
+                let sheet = self.character_sheet_service.upsert_character(args).await?;
+                Ok(format!(
+                    "Successfully updated character with new character sheet: {}",
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "get_character" => {
+                let args: GetCharacterRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .get_character(&args.discord_id)
+                    .await?;
+                Ok(format!(
+                    "Gotten character sheet with discord id {}: {}",
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "get_character_by_name" => {
+                let args: GetCharacterByNameRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .get_character_by_name(&args.character_name)
+                    .await?;
+                Ok(format!(
+                    "Gotten character sheet for {}: {}",
+                    args.character_name,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "add_item" => {
+                let args: AddItemRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .add_item(&args.discord_id, args.item)
+                    .await?;
+                Ok(format!(
+                    "Successfully added item to character {}: {}",
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "remove_item" => {
+                let args: RemoveItemRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .remove_item(&args.discord_id, &args.item_name)
+                    .await?;
+                Ok(format!(
+                    "Successfully removed item '{}' from character {}: {}",
+                    args.item_name,
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "add_spell" => {
+                let args: AddSpellRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .add_spell(&args.discord_id, args.spell)
+                    .await?;
+                Ok(format!(
+                    "Successfully added spell to character {}: {}",
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "update_spell_slots" => {
+                let args: UpdateSpellSlotsRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .update_spell_slots(&args.discord_id, args.level, args.slot, args.used)
+                    .await?;
+                Ok(format!(
+                    "Successfully updated spell slots for level {} on character {}: {}",
+                    args.level,
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "update_current_hp" => {
+                let args: UpdateCurrentHpRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .update_current_hp(&args.discord_id, args.current_hp)
+                    .await?;
+                Ok(format!(
+                    "Successfully updated current HP to {} for character {}: {}",
+                    args.current_hp,
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "update_max_hp" => {
+                let args: UpdateMaxHpRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .update_max_hp(&args.discord_id, args.max_hp)
+                    .await?;
+                Ok(format!(
+                    "Successfully updated max HP to {} for character {}: {}",
+                    args.max_hp,
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            "update_character_level" => {
+                let args: UpdateCharacterLevelRequest = serde_json::from_value(args)?;
+                let sheet = self
+                    .character_sheet_service
+                    .update_character_level(&args.discord_id, args.level)
+                    .await?;
+                Ok(format!(
+                    "Successfully updated character level to {} for character {}: {}",
+                    args.level,
+                    args.discord_id,
+                    serde_json::to_string(&sheet)?
+                ))
+            }
+            _ => Err(LlmError::InvalidResponse(format!("Unknown tool: {}", name))),
+        }
+    }
+}

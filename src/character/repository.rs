@@ -1,0 +1,127 @@
+use sqlx::PgPool;
+
+use crate::character::{entity::CharacterSheet, error::CharacterSheetError};
+
+#[cfg_attr(test, faux::create)]
+pub struct CharacterSheetRepository {
+    pool: PgPool,
+}
+
+#[cfg_attr(test, faux::methods)]
+impl CharacterSheetRepository {
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn upsert_character(
+        &self,
+        character_sheet: &CharacterSheet,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills_block,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            meta = EXCLUDED.meta,
+            identity = EXCLUDED.identity,
+            progression = EXCLUDED.progression,
+            combat = EXCLUDED.combat,
+            abilities_block = EXCLUDED.abilities_block,
+            skills_block = EXCLUDED.skills_block,
+            magic = EXCLUDED.magic,
+            inventory = EXCLUDED.inventory,
+            traits = EXCLUDED.traits,
+            notes = EXCLUDED.notes,
+            updated_at = NOW()
+        RETURNING *
+        "#,
+        )
+        .bind(character_sheet.meta.discord_id.clone()) // ⚠️ see note below
+        .bind(&character_sheet.meta)
+        .bind(&character_sheet.identity)
+        .bind(&character_sheet.progression)
+        .bind(&character_sheet.combat)
+        .bind(&character_sheet.abilities_block)
+        .bind(&character_sheet.skills_block)
+        .bind(&character_sheet.magic)
+        .bind(&character_sheet.inventory)
+        .bind(&character_sheet.traits)
+        .bind(&character_sheet.notes)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn get_character_by_discord_id(
+        &self,
+        id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        SELECT
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills_block,
+            magic,
+            inventory,
+            traits,
+            notes
+        FROM character_sheets
+        WHERE id = $1
+        LIMIT 1
+        "#,
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn get_character_by_name(
+        &self,
+        character_name: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        let results = sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        SELECT
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills_block,
+            magic,
+            inventory,
+            traits,
+            notes
+        FROM character_sheets
+        WHERE identity->>'characterName' = $1
+        "#,
+        )
+        .bind(character_name)
+        .fetch_all(&self.pool)
+        .await?;
+
+        match results.len() {
+            0 => Err(sqlx::Error::RowNotFound.into()),
+            1 => Ok(results.into_iter().next().unwrap()),
+            n => Err(CharacterSheetError::MultipleResultsFound(
+                character_name.to_string(),
+                n,
+            )),
+        }
+    }
+}
