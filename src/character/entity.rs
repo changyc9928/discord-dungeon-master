@@ -788,6 +788,34 @@ impl Skills {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdentityWithDiscordId {
+    pub discord_id: String,
+    pub identity: Identity,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressionWithDiscordId {
+    pub discord_id: String,
+    pub progression: Progression,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CombatWithDiscordId {
+    pub discord_id: String,
+    pub combat: Combat,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryWithDiscordId {
+    pub discord_id: String,
+    pub inventory: Inventory,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

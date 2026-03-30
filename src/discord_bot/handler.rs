@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
+use crate::character::service::CharacterSheetService;
 use crate::discord_bot::{commands, error::DiscordBotError};
 use crate::llm::LLM;
 
@@ -27,6 +28,7 @@ pub struct Data {
     pub buffer_check_interval_seconds: u64,
     pub buffered_messages: Arc<tokio::sync::Mutex<Vec<BufferedMessage>>>,
     pub flush_sender: mpsc::UnboundedSender<()>,
+    pub character_sheet_service: Arc<CharacterSheetService>,
 }
 
 async fn event_handler(
@@ -35,52 +37,46 @@ async fn event_handler(
     _framework: poise::FrameworkContext<'_, Data, Error>,
     data: &Data,
 ) -> Result<(), Error> {
-    match event {
-        serenity::FullEvent::Message { new_message } => {
-            // Ignore empty messages
-            if new_message.content.is_empty() {
-                return Ok(());
-            }
+    let serenity::FullEvent::Message { new_message } = event else {
+        return Ok(());
+    };
 
-            // Get the discord user ID as a string
-            let discord_id = new_message.author.id.to_string();
-            let channel_id = new_message.channel_id;
-
-            if channel_id.to_string() == data.channel_id && discord_id != data.self_discord_id {
-                println!(
-                    "Received message in target channel from {}: {}",
-                    new_message.author.id.to_string(),
-                    new_message.content
-                );
-
-                if discord_id == data.dm_discord_id {
-                    // Add message to buffer
-                    println!("Add message to buffer");
-                    let buffered_message = BufferedMessage {
-                        content: new_message.content.clone(),
-                        author_id: discord_id.clone(),
-                        start_time: chrono::Utc::now(),
-                    };
-
-                    {
-                        let mut messages = data.buffered_messages.lock().await;
-                        messages.push(buffered_message);
-                    }
-                }
-
-                // Check if buffer should be flushed immediately (on message receipt)
-                if should_flush_buffer(data).await? || discord_id != data.dm_discord_id {
-                    flush_buffer(ctx, data).await;
-                }
-            } else {
-                // Ignore messages from other channels
-                return Ok(());
-            }
-
-            Ok(())
-        }
-        _ => Ok(()),
+    if new_message.content.is_empty() {
+        return Ok(());
     }
+
+    let author_id = new_message.author.id.to_string();
+    let channel_id = new_message.channel_id.to_string();
+
+    // Ignore messages outside target channel or from self
+    if channel_id != data.channel_id || author_id == data.self_discord_id {
+        return Ok(());
+    }
+
+    println!(
+        "Received message from {}: {}",
+        author_id, new_message.content
+    );
+
+    let buffered_message = BufferedMessage {
+        content: new_message.content.clone(),
+        author_id: author_id.clone(),
+        start_time: chrono::Utc::now(),
+    };
+
+    if author_id == data.dm_discord_id {
+        println!("Add message to buffer (DM user)");
+        {
+            let mut messages = data.buffered_messages.lock().await;
+            messages.push(buffered_message);
+        }
+
+        if should_flush_buffer(data).await? {
+            flush_buffer(ctx, data).await;
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn start_bot(
@@ -91,6 +87,7 @@ pub async fn start_bot(
     dm_discord_id: String,
     buffered_message_expiry_seconds: u64,
     buffer_check_interval_seconds: u64,
+    character_sheet_service: Arc<CharacterSheetService>,
 ) -> Result<(), DiscordBotError> {
     let llm_service = Arc::clone(&llm);
 
@@ -99,7 +96,15 @@ pub async fn start_bot(
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![commands::ping::ping()],
+            commands: vec![
+                commands::ping::ping(),
+                commands::characters::add_character_meta(),
+                commands::characters::add_character_identity(),
+                commands::characters::add_character_progression(),
+                commands::characters::add_character_combat(),
+                commands::characters::add_character_inventory(),
+                commands::characters::get_character(),
+            ],
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
             },
@@ -121,6 +126,7 @@ pub async fn start_bot(
                     buffer_check_interval_seconds,
                     buffered_messages: Arc::new(tokio::sync::Mutex::new(vec![])),
                     flush_sender: flush_sender_clone,
+                    character_sheet_service,
                 };
 
                 // Start the periodic buffer check task

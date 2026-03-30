@@ -14,5 +14,35 @@ pub trait LLM: Send + Sync {
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
-    async fn dispatch(&self, name: &str, args: serde_json::Value) -> Result<String, LlmError>;
+    async fn dispatch(&self, tool_call: serde_json::Value) -> Result<String, LlmError>;
+
+    async fn add_character_meta(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_identity(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_progression(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_combat(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_inventory(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
 }

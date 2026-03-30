@@ -1,5 +1,7 @@
 use poise::serenity_prelude as serenity;
 
+use crate::character::error::CharacterSheetError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DiscordBotError {
     #[error(transparent)]
@@ -16,4 +18,10 @@ pub enum DiscordBotError {
 
     #[error("Unknown error: {0}")]
     Unknown(String),
+
+    #[error(transparent)]
+    CharacterSheetError(#[from] CharacterSheetError),
+
+    #[error(transparent)]
+    JsonError(#[from] serde_json::Error),
 }

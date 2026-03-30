@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
 use crate::character::{
-    entity::{CharacterSheet, Item, Spell, SpellSlot}, error::CharacterSheetError, repository::CharacterSheetRepository,
+    entity::{
+        CharacterSheet, Combat, Identity, Inventory, Item, Meta, Progression, Spell, SpellSlot,
+    },
+    error::CharacterSheetError,
+    repository::CharacterSheetRepository,
 };
 
 pub struct CharacterSheetService {
@@ -77,6 +81,69 @@ impl CharacterSheetService {
         Ok(entity)
     }
 
+    pub async fn add_character_meta(
+        &self,
+        meta: &Meta,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        self.repo
+            .update_character_meta(meta, &meta.discord_id)
+            .await
+    }
+
+    pub async fn add_character_identity(
+        &self,
+        identity: &Identity,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Updating character identity for discord_id {}: {:?}",
+            discord_id, identity
+        );
+        self.repo
+            .update_character_indentity(identity, discord_id)
+            .await
+    }
+
+    pub async fn add_character_progression(
+        &self,
+        progression: &Progression,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Updating character progression for discord_id {}: {:?}",
+            discord_id, progression
+        );
+        self.repo
+            .update_character_progression(progression, discord_id)
+            .await
+    }
+
+    pub async fn add_character_combat(
+        &self,
+        combat: &Combat,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Updating character combat for discord_id {}: {:?}",
+            discord_id, combat
+        );
+        self.repo.update_character_combat(combat, discord_id).await
+    }
+
+    pub async fn add_character_inventory(
+        &self,
+        discord_id: &str,
+        item: Inventory,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character inventory for discord_id {}: {:?}",
+            discord_id, item
+        );
+        self.repo
+            .update_character_inventory(&item, discord_id)
+            .await
+    }
+
     pub async fn add_item(
         &self,
         discord_id: &str,
@@ -94,7 +161,10 @@ impl CharacterSheetService {
         item_name: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
-        character.inventory.items.retain(|item| item.name != item_name);
+        character
+            .inventory
+            .items
+            .retain(|item| item.name != item_name);
         self.upsert_character(character).await
     }
 
@@ -105,7 +175,11 @@ impl CharacterSheetService {
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
         character.magic.spells.spells.push(spell);
-        character.magic.spells.spells.sort_by_key(|s| s.name.clone());
+        character
+            .magic
+            .spells
+            .spells
+            .sort_by_key(|s| s.name.clone());
         self.upsert_character(character).await
     }
 
@@ -117,16 +191,26 @@ impl CharacterSheetService {
         used: u64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
-        
+
         // Find and update the spell slot for the given level
-        if let Some(spell_slot) = character.magic.spells.spell_slots.iter_mut().find(|s| s.level == level) {
+        if let Some(spell_slot) = character
+            .magic
+            .spells
+            .spell_slots
+            .iter_mut()
+            .find(|s| s.level == level)
+        {
             spell_slot.slot = slot;
             spell_slot.used = used;
         } else {
             // If spell slot doesn't exist, create a new one
-            character.magic.spells.spell_slots.push(SpellSlot { level, slot, used });
+            character
+                .magic
+                .spells
+                .spell_slots
+                .push(SpellSlot { level, slot, used });
         }
-        
+
         // Sort by level
         character.magic.spells.spell_slots.sort_by_key(|s| s.level);
         self.upsert_character(character).await

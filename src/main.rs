@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let gemini: Arc<dyn llm::LLM> = Arc::new(Gemini::new(
         service_config.config.gemini_model.clone(),
-        character_sheet_service,
+        Arc::clone(&character_sheet_service),
         service_config.config.dm_id.clone(),
     )?);
 
@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         service_config.config.dm_id.clone(),
         service_config.config.buffered_message_expiry_seconds,
         service_config.config.buffer_check_interval_seconds,
+        character_sheet_service,
     )
     .await?;
 
