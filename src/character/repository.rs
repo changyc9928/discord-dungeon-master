@@ -1,7 +1,10 @@
 use sqlx::PgPool;
 
 use crate::character::{
-    entity::{CharacterSheet, Combat, Identity, Inventory, Meta, Progression},
+    entity::{
+        AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Magic, Meta, Notes,
+        Progression, SkillsBlock, Traits,
+    },
     error::CharacterSheetError,
 };
 
@@ -177,6 +180,126 @@ impl CharacterSheetRepository {
         "#,
         )
         .bind(inventory)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn update_character_spells(
+        &self,
+        spells: &Magic,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Database updating character spells for discord_id {}: {:?}",
+            discord_id, spells
+        );
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        UPDATE character_sheets
+        SET
+            magic = $1
+        WHERE id = $2
+        RETURNING *
+        "#,
+        )
+        .bind(spells)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn update_character_abilities(
+        &self,
+        abilities: &AbilitiesBlock,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Database updating character abilities for discord_id {}: {:?}",
+            discord_id, abilities
+        );
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        UPDATE character_sheets
+        SET
+            abilities_block = $1
+        WHERE id = $2
+        RETURNING *
+        "#,
+        )
+        .bind(abilities)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn update_character_skills(
+        &self,
+        skills: &SkillsBlock,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Database updating character skills for discord_id {}: {:?}",
+            discord_id, skills
+        );
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        UPDATE character_sheets
+        SET
+            skills_block = $1
+        WHERE id = $2
+        RETURNING *
+        "#,
+        )
+        .bind(skills)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn update_character_traits(
+        &self,
+        traits: &Traits,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Database updating character traits for discord_id {}: {:?}",
+            discord_id, traits
+        );
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        UPDATE character_sheets
+        SET
+            traits = $1
+        WHERE id = $2
+        RETURNING *
+        "#,
+        )
+        .bind(traits)
+        .bind(discord_id)
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
+    pub async fn update_character_notes(
+        &self,
+        notes: &Notes,
+        discord_id: &str,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Database updating character notes for discord_id {}: {:?}",
+            discord_id, notes
+        );
+        Ok(sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        UPDATE character_sheets
+        SET
+            notes = $1
+        WHERE id = $2
+        RETURNING *
+        "#,
+        )
+        .bind(notes)
         .bind(discord_id)
         .fetch_one(&self.pool)
         .await?)

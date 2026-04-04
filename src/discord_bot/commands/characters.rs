@@ -121,6 +121,133 @@ pub async fn add_character_inventory(
     Ok(())
 }
 
+/// Adds characters spell information to the game
+#[poise::command(slash_command)]
+pub async fn add_character_spells(
+    ctx: Context<'_>,
+    spell_description: String,
+) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .add_character_spells(&spell_description, ctx.author().id.to_string().as_str())
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
+/// Adds characters abilities information to the game
+#[poise::command(slash_command)]
+pub async fn add_character_abilities(
+    ctx: Context<'_>,
+    abilities_description: String,
+) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .add_character_abilities(
+            ctx.author().id.to_string().as_str(),
+            &abilities_description,
+        )
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
+/// Adds characters skills information to the game
+#[poise::command(slash_command)]
+pub async fn add_character_skills(
+    ctx: Context<'_>,
+    skills_description: String,
+) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .add_character_skills(
+            ctx.author().id.to_string().as_str(),
+            &skills_description,
+        )
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
+/// Adds characters traits information to the game
+#[poise::command(slash_command)]
+pub async fn add_character_traits(
+    ctx: Context<'_>,
+    traits_description: String,
+) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .add_character_traits(
+            ctx.author().id.to_string().as_str(),
+            &traits_description,
+        )
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
+/// Adds characters notes information to the game
+#[poise::command(slash_command)]
+pub async fn add_character_notes(
+    ctx: Context<'_>,
+    notes_description: String,
+) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .add_character_notes(
+            ctx.author().id.to_string().as_str(),
+            &notes_description,
+        )
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
+
 /// Retrieves a character's information from the game
 #[poise::command(slash_command)]
 pub async fn get_character(ctx: Context<'_>, discord_id: String) -> Result<(), DiscordBotError> {

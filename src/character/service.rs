@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::character::{
     entity::{
-        CharacterSheet, Combat, Identity, Inventory, Item, Meta, Progression, Spell, SpellSlot,
+        AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Item, Magic, Meta,
+        Notes, Progression, SkillsBlock, Spell, SpellSlot, Traits,
     },
     error::CharacterSheetError,
     repository::CharacterSheetRepository,
@@ -142,6 +143,66 @@ impl CharacterSheetService {
         self.repo
             .update_character_inventory(&item, discord_id)
             .await
+    }
+
+    pub async fn add_character_spells(
+        &self,
+        discord_id: &str,
+        spells: &Magic,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character spells for discord_id {}: {:?}",
+            discord_id, spells
+        );
+        self.repo.update_character_spells(spells, discord_id).await
+    }
+
+    pub async fn add_character_abilities(
+        &self,
+        discord_id: &str,
+        abilities: AbilitiesBlock,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character abilities for discord_id {}: {:?}",
+            discord_id, abilities
+        );
+        self.repo.update_character_abilities(&abilities, discord_id).await
+    }
+
+    pub async fn add_character_skills(
+        &self,
+        discord_id: &str,
+        skills: SkillsBlock,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character skills for discord_id {}: {:?}",
+            discord_id, skills
+        );
+        self.repo.update_character_skills(&skills, discord_id).await
+    }
+
+    pub async fn add_character_traits(
+        &self,
+        discord_id: &str,
+        traits: Traits,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character traits for discord_id {}: {:?}",
+            discord_id, traits
+        );
+        self.repo.update_character_traits(&traits, discord_id).await
+    }
+
+    pub async fn add_character_notes(
+        &self,
+        discord_id: &str,
+        notes: Notes,
+    ) -> Result<CharacterSheet, CharacterSheetError> {
+        println!(
+            "Adding character notes for discord_id {}: {:?}",
+            discord_id, notes
+        );
+        self.repo.update_character_notes(&notes, discord_id).await
     }
 
     pub async fn add_item(

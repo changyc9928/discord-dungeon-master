@@ -10,4 +10,6 @@ pub enum LlmError {
     CharacterSheetError(#[from] character::error::CharacterSheetError),
     #[error("{0}")]
     InvalidResponse(String),
+    #[error(transparent)]
+    ToolError(#[from] crate::tool::error::ToolError),
 }

@@ -5,6 +5,7 @@ use crate::{
     config::{AiDmConfig, ServiceConfig},
     llm::gemini::Gemini,
     pg_pool::{TestPgPool, TestPgPoolConfig},
+    tool::service::ToolService,
 };
 
 pub mod character;
@@ -13,6 +14,7 @@ pub mod discord_bot;
 pub mod error;
 pub mod llm;
 pub mod pg_pool;
+pub mod tool;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -36,10 +38,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let character_sheet_service = Arc::new(CharacterSheetService {
         repo: character_sheet_repository,
     });
+    let tool_service = Arc::new(ToolService {
+        character_sheet_service: Arc::clone(&character_sheet_service),
+    });
 
     let gemini: Arc<dyn llm::LLM> = Arc::new(Gemini::new(
         service_config.config.gemini_model.clone(),
         Arc::clone(&character_sheet_service),
+        tool_service,
         service_config.config.dm_id.clone(),
     )?);
 

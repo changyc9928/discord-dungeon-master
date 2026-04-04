@@ -4,7 +4,6 @@ use crate::llm::error::LlmError;
 
 pub mod error;
 pub mod gemini;
-pub mod types;
 
 #[async_trait]
 pub trait LLM: Send + Sync {
@@ -41,6 +40,36 @@ pub trait LLM: Send + Sync {
     ) -> Result<String, LlmError>;
 
     async fn add_character_inventory(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_spells(
+        &self,
+        content: &str,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_abilities(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_skills(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_traits(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError>;
+
+    async fn add_character_notes(
         &self,
         discord_user_id: &str,
         discord_channel_message: &str,

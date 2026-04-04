@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize, ser::StdError};
+use schemars::JsonSchema;
 use sqlx::{
     Decode, Encode, Postgres,
     encode::IsNull,
@@ -11,7 +12,7 @@ use strum::Display;
 
 use crate::character::error::CharacterSheetError;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, Display, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Display, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum Condition {
@@ -46,8 +47,9 @@ pub struct CharacterSheet {
     pub notes: Notes,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Meta {
     pub discord_id: String,
     pub location: String,
@@ -94,8 +96,9 @@ impl Encode<'_, Postgres> for Meta {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Identity {
     pub character_name: String,
     pub species: String,
@@ -141,8 +144,9 @@ impl Encode<'_, Postgres> for Identity {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Progression {
     pub level: u64,
     pub xp: u64,
@@ -222,8 +226,9 @@ impl Encode<'_, Postgres> for Progression {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Combat {
     pub armor_class: u64,
     pub initiative: u64,
@@ -275,8 +280,9 @@ impl Encode<'_, Postgres> for Combat {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct AbilitiesBlock {
     pub abilities: BTreeMap<Ability, AbilityScore>,
 }
@@ -325,8 +331,9 @@ impl Encode<'_, Postgres> for AbilitiesBlock {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct SkillsBlock {
     pub skills: Skills,
 }
@@ -367,8 +374,9 @@ impl Encode<'_, Postgres> for SkillsBlock {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Magic {
     pub spells: Spells,
 }
@@ -409,8 +417,9 @@ impl Encode<'_, Postgres> for Magic {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Inventory {
     pub items: Vec<Item>,
 }
@@ -451,8 +460,9 @@ impl Encode<'_, Postgres> for Inventory {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Traits {
     pub features_and_traits: Vec<FeatureTraits>,
 }
@@ -493,7 +503,7 @@ impl Encode<'_, Postgres> for Traits {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityScore {
     pub base: u64,
@@ -506,8 +516,9 @@ impl AbilityScore {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Characteristics {
     pub background: String,
     pub background_feature: String,
@@ -529,7 +540,7 @@ pub struct Characteristics {
     pub appearance_trait: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Notes {
     pub organizations: Option<String>,
@@ -575,54 +586,61 @@ impl Encode<'_, Postgres> for Notes {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Speed {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Sense {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Defenses {
     pub resistance: Vec<String>,
     pub immunities: Vec<String>,
     pub vulnerabilities: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Action {
     pub name: String,
     pub used_time: Option<u64>,
     pub max_use_time: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct CombatAction {
     pub name: String,
     pub hit_dc: Option<u64>,
     pub damage: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct SpellSlot {
     pub level: u64,
     pub slot: u64,
     pub used: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Spell {
     pub name: String,
     pub level: u64,
@@ -632,8 +650,9 @@ pub struct Spell {
     pub effect: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Spells {
     pub spells: Vec<Spell>,
     pub spell_slots: Vec<SpellSlot>,
@@ -643,8 +662,9 @@ pub struct Spells {
     pub save_dc: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct Item {
     pub name: String,
     pub weight: u64,
@@ -653,7 +673,7 @@ pub struct Item {
     pub equiped: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureTraits {
     pub name: String,
@@ -664,10 +684,11 @@ pub struct FeatureTraits {
 }
 
 #[derive(
-    Debug, PartialEq, Eq, Hash, Clone, Copy, Display, Deserialize, Serialize, PartialOrd, Ord,
+    Debug, PartialEq, Eq, Hash, Clone, Copy, Display, Deserialize, Serialize, PartialOrd, Ord, JsonSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[schemars(inline)]
 pub enum Ability {
     Strength,
     Intelligence,
@@ -677,8 +698,9 @@ pub enum Ability {
     Charisma,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct ProficianciesTrainings {
     pub proficiency_bonus: u64,
     pub armor: Vec<String>,
@@ -687,8 +709,9 @@ pub struct ProficianciesTrainings {
     pub languages: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(inline)]
 pub struct SavingThrows {
     pub proficiency: Vec<Ability>,
     pub saving_sets: BTreeMap<Ability, i64>,
@@ -711,6 +734,7 @@ impl SavingThrows {
 
 #[derive(
     Debug, Deserialize, Serialize, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord,
+    JsonSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -735,13 +759,13 @@ pub enum Skill {
     Survival,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Skills {
     pub skills: BTreeMap<Skill, SkillStatus>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillStatus {
     pub prof: bool,
@@ -786,34 +810,6 @@ impl Skills {
             .map(|(_, v)| v.update_skill_status(abilities, proficiency_bonus))
             .collect::<Result<(), CharacterSheetError>>()
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IdentityWithDiscordId {
-    pub discord_id: String,
-    pub identity: Identity,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProgressionWithDiscordId {
-    pub discord_id: String,
-    pub progression: Progression,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CombatWithDiscordId {
-    pub discord_id: String,
-    pub combat: Combat,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InventoryWithDiscordId {
-    pub discord_id: String,
-    pub inventory: Inventory,
 }
 
 #[cfg(test)]

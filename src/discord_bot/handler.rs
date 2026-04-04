@@ -103,6 +103,7 @@ pub async fn start_bot(
                 commands::characters::add_character_progression(),
                 commands::characters::add_character_combat(),
                 commands::characters::add_character_inventory(),
+                commands::characters::add_character_spells(),
                 commands::characters::get_character(),
             ],
             event_handler: |ctx, event, framework, data| {

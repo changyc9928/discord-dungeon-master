@@ -1,42 +1,213 @@
 use std::sync::Arc;
 
-use api_gemini::{Content, GenerateContentRequest, Part, client::Client};
+use api_gemini::{
+    Content, FunctionCallingConfig, FunctionCallingMode, FunctionDeclaration, FunctionResponse,
+    GenerateContentRequest, Part, SystemInstruction, Tool, ToolConfig, client::Client,
+};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 
 use crate::{
+    character::entity::Meta,
     character::service::CharacterSheetService,
-    llm::{LLM, error::LlmError, types::ToolCall},
+    llm::{LLM, error::LlmError},
+    tool::{
+        service::ToolService,
+        types::{
+            AbilitiesWithDiscordId, CombatWithDiscordId, IdentityWithDiscordId,
+            InventoryWithDiscordId, NotesWithDiscordId, ProgressionWithDiscordId,
+            SkillsWithDiscordId, SpellsWithDiscordId, ToolCall, TraitsWithDiscordId,
+        },
+    },
 };
 
 const MAIN_PROMPT: &str = include_str!("./../../prompts/main.txt");
 const MAIN_FOLLOWUP_PROMPT: &str = include_str!("./../../prompts/main_followup.txt");
-const META_PROMPT: &str = include_str!("./../../prompts/meta.txt");
-const IDENTITY_PROMPT: &str = include_str!("./../../prompts/identity.txt");
-const PROGRESSION_PROMPT: &str = include_str!("./../../prompts/progression.txt");
-const COMBAT_PROMPT: &str = include_str!("./../../prompts/combat.txt");
-const INVENTORY_PROMPT: &str = include_str!("./../../prompts/inventory.txt");
 
 pub struct Gemini {
     character_sheet_service: Arc<CharacterSheetService>,
     client: Client,
     model: String,
     dm_discord_id: String,
+    tool_service: Arc<ToolService>,
 }
 
 impl Gemini {
     pub fn new(
         model: String,
         character_sheet_service: Arc<CharacterSheetService>,
+        tool_service: Arc<ToolService>,
         dm_discord_id: String,
     ) -> Result<Self, LlmError> {
-        // Create client from GEMINI_API_KEY environment variable
         let client = Client::new()?;
         Ok(Self {
             client,
             character_sheet_service,
             model,
             dm_discord_id,
+            tool_service,
         })
+    }
+
+    fn clean_schema(value: &mut serde_json::Value) {
+        if let Some(obj) = value.as_object_mut() {
+            if let Some(t) = obj.get_mut("type") {
+                if let Some(arr) = t.as_array() {
+                    if arr.len() == 2 && arr.contains(&"null".into()) {
+                        let non_null = arr.iter().find(|v| *v != "null").unwrap();
+                        *t = non_null.clone();
+                    }
+                }
+            }
+            for v in obj.values_mut() {
+                Self::clean_schema(v);
+            }
+        }
+    }
+
+    async fn call_with_tool<T: JsonSchema>(
+        &self,
+        tool_name: &str,
+        system_prompt: &str,
+        user_content: &str,
+    ) -> Result<String, LlmError> {
+        let schema = schemars::schema_for!(T);
+        let mut schema = serde_json::to_value(&schema).unwrap();
+        Self::clean_schema(&mut schema);
+
+        let mut contents = GenerateContentRequest {
+            contents: vec![Content {
+                role: "user".to_string(),
+                parts: vec![Part {
+                    text: Some(user_content.to_string()),
+                    ..Default::default()
+                }],
+            }],
+            system_instruction: Some(SystemInstruction {
+                role: "system".to_string(),
+                parts: vec![Part {
+                    text: Some(system_prompt.to_string()),
+                    ..Default::default()
+                }],
+            }),
+            tools: Some(vec![Tool {
+                function_declarations: Some(vec![FunctionDeclaration {
+                    name: tool_name.to_string(),
+                    description: "".to_string(),
+                    parameters: Some(serde_json::json!({
+                        "type": schema.get("type"),
+                        "properties": schema.get("properties"),
+                        "required": schema.get("required"),
+                    })),
+                }]),
+                code_execution: None,
+                google_search_retrieval: None,
+                code_execution_tool: None,
+            }]),
+            tool_config: Some(ToolConfig {
+                function_calling_config: Some(FunctionCallingConfig {
+                    mode: FunctionCallingMode::Auto,
+                    allowed_function_names: None,
+                }),
+                code_execution: None,
+            }),
+            ..Default::default()
+        };
+
+        let response = self
+            .client
+            .models()
+            .by_name(&self.model)
+            .generate_content(&contents)
+            .await?;
+
+        let tool_call = response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .ok_or_else(|| {
+                LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                    "No tool call from Gemini".to_string(),
+                ))
+            })?
+            .function_call
+            .as_ref()
+            .ok_or_else(|| {
+                LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                    "No function call in tool call from Gemini".to_string(),
+                ))
+            })?;
+
+        let res = self
+            .tool_service
+            .dispatch(serde_json::to_value(tool_call)?)
+            .await?;
+
+        let function_response_contents = Part {
+            function_response: Some(FunctionResponse {
+                name: tool_call.name.clone(),
+                response: res,
+            }),
+            ..Default::default()
+        };
+
+        contents.contents.push(
+            response
+                .candidates
+                .first()
+                .ok_or_else(|| {
+                    LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                        "No candidates from Gemini".to_string(),
+                    ))
+                })?
+                .content
+                .clone(),
+        );
+        contents.contents.push(Content {
+            role: "tool".to_string(),
+            parts: vec![function_response_contents],
+        });
+
+        let final_response = self
+            .client
+            .models()
+            .by_name(&self.model)
+            .generate_content(&contents)
+            .await?;
+
+        println!("Final response from Gemini: {:?}", final_response);
+
+        Ok(final_response
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .and_then(|p| p.text.as_ref())
+            .cloned()
+            .ok_or_else(|| {
+                LlmError::GeminiError(api_gemini::error::Error::Unknown(
+                    "No response from Gemini".to_owned(),
+                ))
+            })?)
+    }
+
+    async fn run_with_tools(
+        &self,
+        contents: Vec<Content>,
+        followup_builder: impl Fn(&str, &str, &serde_json::Value) -> String,
+    ) -> Result<String, LlmError> {
+        let text = self.call_llm(contents).await?;
+
+        let Some((name, args, context)) = self.parse_tool_call(&text)? else {
+            return Ok(text);
+        };
+
+        let tool_result = self.dispatch(args).await?;
+
+        let followup_prompt = followup_builder(&name, &tool_result, &context);
+
+        let followup_contents = vec![self.user_text_content(followup_prompt)];
+
+        self.call_llm(followup_contents).await
     }
 
     async fn call_llm(&self, contents: Vec<Content>) -> Result<String, LlmError> {
@@ -83,7 +254,7 @@ impl Gemini {
             .and_then(|n| n.as_str())
             .ok_or_else(|| LlmError::InvalidResponse("Missing tool name".into()))?;
 
-        let args = tool_call
+        let _args = tool_call
             .get("arguments")
             .cloned()
             .ok_or_else(|| LlmError::InvalidResponse("Missing arguments".into()))?;
@@ -96,46 +267,6 @@ impl Gemini {
         Ok(Some((name.to_string(), tool_call.clone(), context)))
     }
 
-    async fn run_with_tools(
-        &self,
-        contents: Vec<Content>,
-        followup_builder: impl Fn(&str, &str, &serde_json::Value) -> String,
-    ) -> Result<String, LlmError> {
-        let text = self.call_llm(contents).await?;
-
-        let Some((name, args, context)) = self.parse_tool_call(&text)? else {
-            return Ok(text);
-        };
-
-        let tool_result = self.dispatch(args).await?;
-
-        let followup_prompt = followup_builder(&name, &tool_result, &context);
-
-        let followup_contents = vec![self.user_text_content(followup_prompt)];
-
-        self.call_llm(followup_contents).await
-    }
-
-    fn system_content(&self, text: impl Into<String>) -> Content {
-        Content {
-            role: "user".to_string(),
-            parts: vec![Part {
-                text: Some(text.into()),
-                ..Default::default()
-            }],
-        }
-    }
-
-    fn user_json_content<T: serde::Serialize>(&self, value: &T) -> Content {
-        Content {
-            role: "user".to_string(),
-            parts: vec![Part {
-                text: Some(serde_json::to_string(value).unwrap()),
-                ..Default::default()
-            }],
-        }
-    }
-
     fn user_text_content(&self, text: impl Into<String>) -> Content {
         Content {
             role: "user".to_string(),
@@ -145,42 +276,90 @@ impl Gemini {
             }],
         }
     }
-
-    async fn run_prompt(
-        &self,
-        system_prompt: &str,
-        discord_user_id: &str,
-        discord_channel_message: &str,
-        followup: impl Fn(&str, &str, &serde_json::Value) -> String,
-    ) -> Result<String, LlmError> {
-        let contents = vec![
-            self.system_content(system_prompt),
-            self.user_json_content(&serde_json::json!({
-                "discord_id": discord_user_id,
-                "message": discord_channel_message
-            })),
-        ];
-
-        self.run_with_tools(contents, followup).await
-    }
-
-    fn default_followup(&self, name: &str, result: &str, _: &serde_json::Value) -> String {
-        format!(
-            r#"
-            你是一个DND助手...
-
-            工具名称：{name}
-            工具结果：
-            {result}
-
-            请总结状态...
-            "#
-        )
-    }
 }
 
 #[async_trait]
 impl LLM for Gemini {
+    async fn add_character_spells(
+        &self,
+        content: &str,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        self.call_with_tool::<SpellsWithDiscordId>(
+            "add_character_spells",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的法术相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些法术信息",
+            &format!("发起者ID：{}；内容：{}", discord_user_id, content),
+        )
+        .await
+    }
+
+    async fn add_character_abilities(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        self.call_with_tool::<AbilitiesWithDiscordId>(
+            "add_character_abilities",
+            include_str!("./../../prompts/abilities.txt"),
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
+        )
+        .await
+    }
+
+    async fn add_character_skills(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        self.call_with_tool::<SkillsWithDiscordId>(
+            "add_character_skills",
+            include_str!("./../../prompts/skills.txt"),
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
+        )
+        .await
+    }
+
+    async fn add_character_traits(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        self.call_with_tool::<TraitsWithDiscordId>(
+            "add_character_traits",
+            include_str!("./../../prompts/traits.txt"),
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
+        )
+        .await
+    }
+
+    async fn add_character_notes(
+        &self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        self.call_with_tool::<NotesWithDiscordId>(
+            "add_character_notes",
+            include_str!("./../../prompts/notes.txt"),
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
+        )
+        .await
+    }
+
     async fn request_to_llm(
         &self,
         discord_user_id: &str,
@@ -188,7 +367,7 @@ impl LLM for Gemini {
     ) -> Result<String, LlmError> {
         let contents = vec![
             Content {
-                role: "system".to_string(),
+                role: "user".to_string(),
                 parts: vec![Part {
                     text: Some(
                         MAIN_PROMPT
@@ -229,11 +408,16 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_prompt(
-            META_PROMPT,
-            discord_user_id,
-            discord_channel_message,
-            |name, result, context| self.default_followup(name, result, context),
+        self.call_with_tool::<Meta>(
+            "add_character_meta",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的元数据相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些元数据信息",
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
         )
         .await
     }
@@ -243,11 +427,16 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_prompt(
-            IDENTITY_PROMPT,
-            discord_user_id,
-            discord_channel_message,
-            |name, result, context| self.default_followup(name, result, context),
+        self.call_with_tool::<IdentityWithDiscordId>(
+            "add_character_identity",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的身份相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些身份信息",
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
         )
         .await
     }
@@ -257,11 +446,16 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_prompt(
-            PROGRESSION_PROMPT,
-            discord_user_id,
-            discord_channel_message,
-            |name, result, context| self.default_followup(name, result, context),
+        self.call_with_tool::<ProgressionWithDiscordId>(
+            "add_character_progression",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的进度相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些进度信息",
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
         )
         .await
     }
@@ -271,11 +465,16 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_prompt(
-            COMBAT_PROMPT,
-            discord_user_id,
-            discord_channel_message,
-            |name, result, context| self.default_followup(name, result, context),
+        self.call_with_tool::<CombatWithDiscordId>(
+            "add_character_combat",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的战斗相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些战斗信息",
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
         )
         .await
     }
@@ -285,11 +484,16 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_prompt(
-            INVENTORY_PROMPT,
-            discord_user_id,
-            discord_channel_message,
-            |name, result, context| self.default_followup(name, result, context),
+        self.call_with_tool::<InventoryWithDiscordId>(
+            "add_character_inventory",
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要根据用户提供的资料录入该角色的物品栏相关信息，\
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些物品栏信息",
+            &format!(
+                "发起者ID：{}；内容：{}",
+                discord_user_id, discord_channel_message
+            ),
         )
         .await
     }
@@ -344,6 +548,19 @@ impl LLM for Gemini {
                     .await?;
                 format!(
                     "Successfully updated character with new combat information: {}",
+                    serde_json::to_string(&sheet)?
+                )
+            }
+            ToolCall::AddCharacterSpells(add_character_spells_request) => {
+                let sheet = self
+                    .character_sheet_service
+                    .add_character_spells(
+                        &add_character_spells_request.discord_id,
+                        &add_character_spells_request.spells,
+                    )
+                    .await?;
+                format!(
+                    "Successfully updated character with new spells: {}",
                     serde_json::to_string(&sheet)?
                 )
             }
@@ -488,6 +705,62 @@ impl LLM for Gemini {
                 format!(
                     "Successfully updated character inventory for character {}: {}",
                     add_character_inventory_request.discord_id,
+                    serde_json::to_string(&sheet)?
+                )
+            }
+            ToolCall::AddCharacterAbilities(add_character_abilities_request) => {
+                let sheet = self
+                    .character_sheet_service
+                    .add_character_abilities(
+                        &add_character_abilities_request.discord_id,
+                        add_character_abilities_request.abilities,
+                    )
+                    .await?;
+                format!(
+                    "Successfully updated character abilities for character {}: {}",
+                    add_character_abilities_request.discord_id,
+                    serde_json::to_string(&sheet)?
+                )
+            }
+            ToolCall::AddCharacterSkills(add_character_skills_request) => {
+                let sheet = self
+                    .character_sheet_service
+                    .add_character_skills(
+                        &add_character_skills_request.discord_id,
+                        add_character_skills_request.skills,
+                    )
+                    .await?;
+                format!(
+                    "Successfully updated character skills for character {}: {}",
+                    add_character_skills_request.discord_id,
+                    serde_json::to_string(&sheet)?
+                )
+            }
+            ToolCall::AddCharacterTraits(add_character_traits_request) => {
+                let sheet = self
+                    .character_sheet_service
+                    .add_character_traits(
+                        &add_character_traits_request.discord_id,
+                        add_character_traits_request.traits,
+                    )
+                    .await?;
+                format!(
+                    "Successfully updated character traits for character {}: {}",
+                    add_character_traits_request.discord_id,
+                    serde_json::to_string(&sheet)?
+                )
+            }
+            ToolCall::AddCharacterNotes(add_character_notes_request) => {
+                let sheet = self
+                    .character_sheet_service
+                    .add_character_notes(
+                        &add_character_notes_request.discord_id,
+                        add_character_notes_request.notes,
+                    )
+                    .await?;
+                format!(
+                    "Successfully updated character notes for character {}: {}",
+                    add_character_notes_request.discord_id,
                     serde_json::to_string(&sheet)?
                 )
             }

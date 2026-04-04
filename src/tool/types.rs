@@ -1,0 +1,208 @@
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use crate::character::entity::{
+    AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Item, Magic, Meta, Notes,
+    Progression, SkillsBlock, Spell, Traits,
+};
+
+#[derive(Deserialize)]
+#[serde(tag = "name", content = "args")]
+pub enum ToolCall {
+    #[serde(rename = "add_character_meta")]
+    AddCharacterMeta(Meta),
+
+    #[serde(rename = "add_character_identity")]
+    AddCharacterIdentity(IdentityWithDiscordId),
+
+    #[serde(rename = "add_character_progression")]
+    AddCharacterProgression(ProgressionWithDiscordId),
+
+    #[serde(rename = "add_character_combat")]
+    AddCharacterCombat(CombatWithDiscordId),
+
+    #[serde(rename = "add_character_spells")]
+    AddCharacterSpells(SpellsWithDiscordId),
+
+    #[serde(rename = "upsert_character")]
+    UpsertCharacter(CharacterSheet),
+
+    #[serde(rename = "get_character")]
+    GetCharacter(GetCharacterRequest),
+
+    #[serde(rename = "get_character_by_name")]
+    GetCharacterByName(GetCharacterByNameRequest),
+
+    #[serde(rename = "add_item")]
+    AddItem(AddItemRequest),
+
+    #[serde(rename = "remove_item")]
+    RemoveItem(RemoveItemRequest),
+
+    #[serde(rename = "add_spell")]
+    AddSpell(AddSpellRequest),
+
+    #[serde(rename = "update_spell_slots")]
+    UpdateSpellSlots(UpdateSpellSlotsRequest),
+
+    #[serde(rename = "update_current_hp")]
+    UpdateCurrentHp(UpdateCurrentHpRequest),
+
+    #[serde(rename = "update_max_hp")]
+    UpdateMaxHp(UpdateMaxHpRequest),
+
+    #[serde(rename = "update_character_level")]
+    UpdateCharacterLevel(UpdateCharacterLevelRequest),
+
+    #[serde(rename = "add_character_abilities")]
+    AddCharacterAbilities(AbilitiesWithDiscordId),
+
+    #[serde(rename = "add_character_skills")]
+    AddCharacterSkills(SkillsWithDiscordId),
+
+    #[serde(rename = "add_character_traits")]
+    AddCharacterTraits(TraitsWithDiscordId),
+
+    #[serde(rename = "add_character_notes")]
+    AddCharacterNotes(NotesWithDiscordId),
+
+    #[serde(rename = "add_character_inventory")]
+    AddCharacterInventory(InventoryWithDiscordId),
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct IdentityWithDiscordId {
+    pub discord_id: String,
+    pub identity: Identity,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct ProgressionWithDiscordId {
+    pub discord_id: String,
+    pub progression: Progression,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct CombatWithDiscordId {
+    pub discord_id: String,
+    pub combat: Combat,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct AbilitiesWithDiscordId {
+    pub discord_id: String,
+    pub abilities: AbilitiesBlock,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct SkillsWithDiscordId {
+    pub discord_id: String,
+    pub skills: SkillsBlock,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct TraitsWithDiscordId {
+    pub discord_id: String,
+    pub traits: Traits,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct NotesWithDiscordId {
+    pub discord_id: String,
+    pub notes: Notes,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct InventoryWithDiscordId {
+    pub discord_id: String,
+    pub inventory: Inventory,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpellsWithDiscordId {
+    pub discord_id: String,
+    pub spells: Magic,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetCharacterRequest {
+    pub discord_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetCharacterByNameRequest {
+    pub character_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddItemRequest {
+    pub discord_id: String,
+    pub item: Item,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RemoveItemRequest {
+    pub discord_id: String,
+    pub item_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AddSpellRequest {
+    pub discord_id: String,
+    pub spell: Spell,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateSpellSlotsRequest {
+    pub discord_id: String,
+    pub level: u64,
+    pub slot: u64,
+    pub used: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateCurrentHpRequest {
+    pub discord_id: String,
+    pub current_hp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateMaxHpRequest {
+    pub discord_id: String,
+    pub max_hp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateCharacterLevelRequest {
+    pub discord_id: String,
+    pub level: u64,
+}
+
+#[cfg(test)]
+mod test {
+    use crate::tool::types::SpellsWithDiscordId;
+
+
+    #[test]
+    fn test_schema() {
+        let schema = schemars::schema_for!(SpellsWithDiscordId);
+        println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+    }
+}
