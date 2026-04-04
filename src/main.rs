@@ -1,5 +1,7 @@
 use std::{error::Error, sync::Arc};
 
+use tokio::sync::Mutex;
+
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
     config::{AiDmConfig, ServiceConfig},
@@ -42,12 +44,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         character_sheet_service: Arc::clone(&character_sheet_service),
     });
 
-    let gemini: Arc<dyn llm::LLM> = Arc::new(Gemini::new(
+    let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
         service_config.config.gemini_model.clone(),
         Arc::clone(&character_sheet_service),
         tool_service,
         service_config.config.dm_id.clone(),
-    )?);
+    )?));
 
     let discord_token = service_config
         .config

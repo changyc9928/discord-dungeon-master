@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use api_gemini::{
     Content, FunctionCallingConfig, FunctionCallingMode, FunctionDeclaration, FunctionResponse,
@@ -30,6 +30,7 @@ pub struct Gemini {
     model: String,
     dm_discord_id: String,
     tool_service: Arc<ToolService>,
+    cached_context: HashMap<String, GenerateContentRequest>,
 }
 
 impl Gemini {
@@ -46,6 +47,7 @@ impl Gemini {
             model,
             dm_discord_id,
             tool_service,
+            cached_context: HashMap::new(),
         })
     }
 
@@ -276,10 +278,255 @@ impl Gemini {
             }],
         }
     }
+
+    /// Helper to extract final text from response content
+    fn extract_final_text(contents: &[Content]) -> Result<String, LlmError> {
+        contents
+            .last()
+            .ok_or_else(|| LlmError::MissingContent("final response".to_owned()))?
+            .parts
+            .first()
+            .ok_or_else(|| LlmError::MissingContent("final response part".to_owned()))?
+            .text
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| LlmError::InvalidResponse("final response text".to_owned()))
+    }
+
+    /// Generic tool-calling loop that handles conversation with tools
+    async fn process_tool_calls<F>(
+        &mut self,
+        discord_user_id: &str,
+        initial_modifier: F,
+    ) -> Result<String, LlmError>
+    where
+        F: FnOnce(&mut GenerateContentRequest),
+    {
+        // Get or create context
+        let context = self
+            .cached_context
+            .entry(discord_user_id.to_owned())
+            .or_insert_with(|| GenerateContentRequest {
+                contents: Vec::new(),
+                ..Default::default()
+            });
+
+        // Apply initial modification (add user message, system instruction, tools, etc.)
+        initial_modifier(context);
+
+        // Initial API call
+        let mut response = self
+            .client
+            .models()
+            .by_name(&self.model)
+            .generate_content(context)
+            .await?;
+
+        // Tool-calling loop
+        loop {
+            let tool_call = if let Some(candidate) = response.candidates.first() {
+                if let Some(part) = candidate.content.parts.first() {
+                    part.function_call.as_ref()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(tool_call) = tool_call {
+                // Dispatch tool
+                let res = self
+                    .tool_service
+                    .dispatch(serde_json::to_value(tool_call)?)
+                    .await?;
+
+                // Push assistant's response to context
+                if let Some(candidate) = response.candidates.first() {
+                    context.contents.push(candidate.content.clone());
+                }
+
+                // Push tool response to context
+                context.contents.push(Content {
+                    role: "tool".to_string(),
+                    parts: vec![Part {
+                        function_response: Some(FunctionResponse {
+                            name: tool_call.name.clone(),
+                            response: res,
+                        }),
+                        ..Default::default()
+                    }],
+                });
+
+                // Get next response
+                response = self
+                    .client
+                    .models()
+                    .by_name(&self.model)
+                    .generate_content(context)
+                    .await?;
+
+                // Store this response in context
+                context.contents.push(response.candidates[0].content.clone());
+            } else {
+                break;
+            }
+        }
+
+        Self::extract_final_text(&context.contents)
+    }
+
+    /// Run tool calls on an existing context (for continuing conversations)
+    async fn run_tool_calls_on_existing(
+        client: &Client,
+        model: &str,
+        tool_service: &ToolService,
+        context: &mut GenerateContentRequest,
+    ) -> Result<String, LlmError> {
+        let mut response = client
+            .models()
+            .by_name(model)
+            .generate_content(context)
+            .await?;
+
+        // Tool-calling loop
+        loop {
+            let tool_call = if let Some(candidate) = response.candidates.first() {
+                if let Some(part) = candidate.content.parts.first() {
+                    part.function_call.as_ref()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(tool_call) = tool_call {
+                // Dispatch tool
+                let res = tool_service
+                    .dispatch(serde_json::to_value(tool_call)?)
+                    .await?;
+
+                // Push assistant's response to context
+                if let Some(candidate) = response.candidates.first() {
+                    context.contents.push(candidate.content.clone());
+                }
+
+                // Push tool response to context
+                context.contents.push(Content {
+                    role: "tool".to_string(),
+                    parts: vec![Part {
+                        function_response: Some(FunctionResponse {
+                            name: tool_call.name.clone(),
+                            response: res,
+                        }),
+                        ..Default::default()
+                    }],
+                });
+
+                // Get next response
+                response = client
+                    .models()
+                    .by_name(model)
+                    .generate_content(context)
+                    .await?;
+
+                // Store this response in context
+                context.contents.push(response.candidates[0].content.clone());
+            } else {
+                break;
+            }
+        }
+
+        Self::extract_final_text(&context.contents)
+    }
 }
 
 #[async_trait]
 impl LLM for Gemini {
+    async fn add_character_meta_initiate(
+        &mut self,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let schema = schemars::schema_for!(Meta);
+        let mut schema = serde_json::to_value(&schema).unwrap();
+        Self::clean_schema(&mut schema);
+
+        self.process_tool_calls(discord_user_id, |context| {
+            *context = GenerateContentRequest {
+                contents: vec![Content {
+                    role: "user".to_string(),
+                    parts: vec![Part {
+                        text: Some("Hi".to_string()),
+                        ..Default::default()
+                    }],
+                }],
+                system_instruction: Some(SystemInstruction {
+                    role: "system".to_string(),
+                    parts: vec![Part {
+                        text: Some(
+                            "你是一个龙与地下城2024版本的DM助手，\
+                            你需要根据用户提供的资料录入该角色的元数据相关信息，\
+                            你将使用输入给你的discordId来使用工具，\
+                            录入成功后请总结更新了角色的哪些元数据信息"
+                                .to_string(),
+                        ),
+                        ..Default::default()
+                    }],
+                }),
+                tools: Some(vec![Tool {
+                    function_declarations: Some(vec![FunctionDeclaration {
+                        name: "add_character_meta".to_string(),
+                        description: "".to_string(),
+                        parameters: Some(serde_json::json!({
+                            "type": schema.get("type"),
+                            "properties": schema.get("properties"),
+                            "required": schema.get("required"),
+                        })),
+                    }]),
+                    code_execution: None,
+                    google_search_retrieval: None,
+                    code_execution_tool: None,
+                }]),
+                tool_config: Some(ToolConfig {
+                    function_calling_config: Some(FunctionCallingConfig {
+                        mode: FunctionCallingMode::Auto,
+                        allowed_function_names: None,
+                    }),
+                    code_execution: None,
+                }),
+                ..Default::default()
+            };
+        })
+        .await
+    }
+
+    async fn add_character_meta_conv(
+        &mut self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        let cache = self
+            .cached_context
+            .get_mut(discord_user_id)
+            .ok_or(LlmError::MissingContent(discord_user_id.to_owned()))?;
+        cache.contents.push(Content {
+            parts: vec![Part {
+                text: Some(discord_channel_message.to_owned()),
+                ..Default::default()
+            }],
+            role: "user".to_owned(),
+        });
+
+        Self::run_tool_calls_on_existing(
+            &self.client,
+            &self.model,
+            &self.tool_service,
+            cache,
+        )
+        .await
+    }
+
     async fn add_character_spells(
         &self,
         content: &str,

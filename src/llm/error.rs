@@ -12,4 +12,6 @@ pub enum LlmError {
     InvalidResponse(String),
     #[error(transparent)]
     ToolError(#[from] crate::tool::error::ToolError),
+    #[error("Content not found: {0}")]
+    MissingContent(String),
 }

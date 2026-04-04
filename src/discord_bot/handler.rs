@@ -1,7 +1,7 @@
 use chrono::DateTime;
 use poise::serenity_prelude as serenity;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Duration, interval};
 
 use crate::character::service::CharacterSheetService;
@@ -18,9 +18,21 @@ pub struct BufferedMessage {
     pub start_time: DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CachedConversation {
+    pub user_discord_id: String,
+    pub action: Action,
+}
+
+#[derive(Debug, Clone)]
+pub enum Action {
+    AddingNewCharacterMeta,
+    AddingNewCharacterIdentity,
+}
+
 #[derive(Clone)]
 pub struct Data {
-    pub llm: Arc<dyn LLM>,
+    pub llm: Arc<Mutex<dyn LLM>>,
     pub channel_id: String,
     pub self_discord_id: String,
     pub dm_discord_id: String,
@@ -29,6 +41,7 @@ pub struct Data {
     pub buffered_messages: Arc<tokio::sync::Mutex<Vec<BufferedMessage>>>,
     pub flush_sender: mpsc::UnboundedSender<()>,
     pub character_sheet_service: Arc<CharacterSheetService>,
+    pub cache: Vec<CachedConversation>,
 }
 
 async fn event_handler(
@@ -74,6 +87,19 @@ async fn event_handler(
         if should_flush_buffer(data).await? {
             flush_buffer(ctx, data).await;
         }
+    } else {
+        let llm = &data.llm;
+        if let Some(action) = data.cache.iter().find(|c| c.user_discord_id == author_id) {
+            match action.action {
+                Action::AddingNewCharacterMeta => {
+                    llm.lock()
+                        .await
+                        .add_character_meta_conv(&author_id, &new_message.content)
+                        .await?;
+                }
+                Action::AddingNewCharacterIdentity => todo!(),
+            }
+        }
     }
 
     Ok(())
@@ -81,7 +107,7 @@ async fn event_handler(
 
 pub async fn start_bot(
     token: &str,
-    llm: Arc<dyn LLM>,
+    llm: Arc<Mutex<dyn LLM>>,
     channel_id: String,
     self_discord_id: String,
     dm_discord_id: String,
@@ -99,11 +125,16 @@ pub async fn start_bot(
             commands: vec![
                 commands::ping::ping(),
                 commands::characters::add_character_meta(),
+                commands::characters::add_character_meta_init(),
                 commands::characters::add_character_identity(),
                 commands::characters::add_character_progression(),
                 commands::characters::add_character_combat(),
                 commands::characters::add_character_inventory(),
                 commands::characters::add_character_spells(),
+                commands::characters::add_character_abilities(),
+                commands::characters::add_character_skills(),
+                commands::characters::add_character_traits(),
+                commands::characters::add_character_notes(),
                 commands::characters::get_character(),
             ],
             event_handler: |ctx, event, framework, data| {
@@ -128,6 +159,7 @@ pub async fn start_bot(
                     buffered_messages: Arc::new(tokio::sync::Mutex::new(vec![])),
                     flush_sender: flush_sender_clone,
                     character_sheet_service,
+                    cache: vec![],
                 };
 
                 // Start the periodic buffer check task
@@ -198,6 +230,8 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
 
     match data
         .llm
+        .lock()
+        .await
         .request_to_llm(primary_author, &compiled_content)
         .await
     {
