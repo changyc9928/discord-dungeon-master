@@ -20,6 +20,9 @@ pub mod tool;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // Basic initialization that prints to stdout
+    tracing_subscriber::fmt::init();
+
     let service_config: ServiceConfig<AiDmConfig> = ServiceConfig::load("/app/config.yaml")?;
     let db_config = service_config
         .database

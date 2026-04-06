@@ -76,15 +76,36 @@ impl CharacterSheetRepository {
     ) -> Result<CharacterSheet, CharacterSheetError> {
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            meta = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills_block,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            meta = EXCLUDED.meta
         RETURNING *
         "#,
         )
-        .bind(&meta)
         .bind(discord_id)
+        .bind(&meta)
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(SkillsBlock::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }

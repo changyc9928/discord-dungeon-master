@@ -26,3 +26,4 @@ api_gemini = "0.5.0"
 poise = "0.6"
 serenity = { version = "0.12", features = ["client", "gateway", "interactions_endpoint", "cache"] }
 chrono = "0.4.44"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

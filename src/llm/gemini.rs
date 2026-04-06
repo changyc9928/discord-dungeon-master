@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::{debug, info, warn};
 
 use crate::{
     character::entity::Meta,
@@ -234,7 +235,11 @@ impl Gemini {
         self.cached_context
             .insert(discord_user_id.to_owned(), context);
 
-        self.conversation_continue(discord_user_id, "Hi").await
+        self.conversation_continue(
+            discord_user_id,
+            &format!("我的Discord ID是{}", discord_user_id),
+        )
+        .await
     }
 }
 
@@ -245,11 +250,20 @@ impl LLM for Gemini {
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
+        info!(discord_user_id = %discord_user_id, "Starting conversation_continue");
+
         let mut cache = match self.cached_context.get(discord_user_id) {
-            Some(c) => c.clone(),
-            None => todo!(),
+            Some(c) => {
+                debug!(discord_user_id = %discord_user_id, "Cache hit, using existing context");
+                c.clone()
+            }
+            None => {
+                warn!(discord_user_id = %discord_user_id, "Cache miss - no existing context found");
+                todo!()
+            }
         };
 
+        debug!(discord_user_id = %discord_user_id, "Pushing user message to cache");
         cache.contents.push(Content {
             parts: vec![Part {
                 text: Some(discord_channel_message.to_owned()),
@@ -258,6 +272,7 @@ impl LLM for Gemini {
             role: "user".to_owned(),
         });
 
+        debug!(discord_user_id = %discord_user_id, "Calling Gemini API for initial response");
         let mut response = self
             .client
             .models()
@@ -265,7 +280,14 @@ impl LLM for Gemini {
             .generate_content(&cache)
             .await?;
 
+        // Push assistant's response to context
+        if let Some(candidate) = response.candidates.first() {
+            debug!(discord_user_id = %discord_user_id, "Pushing assistant's initial response to cache");
+            cache.contents.push(candidate.content.clone());
+        }
+
         // Tool-calling loop
+        let mut tool_call_count = 0;
         loop {
             let tool_call = if let Some(candidate) = response.candidates.first() {
                 if let Some(part) = candidate.content.parts.first() {
@@ -278,7 +300,16 @@ impl LLM for Gemini {
             };
 
             if let Some(tool_call) = tool_call {
+                tool_call_count += 1;
+                info!(
+                    discord_user_id = %discord_user_id,
+                    tool_name = %tool_call.name,
+                    tool_call_count = tool_call_count,
+                    "Detected tool call"
+                );
+
                 let res = if tool_call.name == "remove_cache" {
+                    debug!(discord_user_id = %discord_user_id, "Handling remove_cache special case");
                     let args: RemoveCacheRequest = serde_json::from_value(tool_call.args.clone())?;
                     self.cached_context.remove(&args.discord_id);
                     serde_json::to_value(json!({
@@ -286,18 +317,27 @@ impl LLM for Gemini {
                         "discord_id": args.discord_id
                     }))?
                 } else {
+                    debug!(
+                        discord_user_id = %discord_user_id,
+                        tool_name = %tool_call.name,
+                        "Dispatching tool to service"
+                    );
                     // Dispatch tool
-                    self.tool_service
+                    let response = self
+                        .tool_service
                         .dispatch(serde_json::to_value(tool_call)?)
-                        .await?
+                        .await;
+                    match response {
+                        Ok(r) => r,
+                        Err(e) => serde_json::to_value(json!(
+                            {   "result": "Error calling tool",
+                                "error": e.to_string()}
+                        ))?,
+                    }
                 };
 
-                // Push assistant's response to context
-                if let Some(candidate) = response.candidates.first() {
-                    cache.contents.push(candidate.content.clone());
-                }
-
                 // Push tool response to context
+                debug!(discord_user_id = %discord_user_id, "Pushing tool response to cache");
                 cache.contents.push(Content {
                     role: "tool".to_string(),
                     parts: vec![Part {
@@ -310,6 +350,7 @@ impl LLM for Gemini {
                 });
 
                 // Get next response
+                debug!(discord_user_id = %discord_user_id, "Calling Gemini API for next response after tool call");
                 response = self
                     .client
                     .models()
@@ -318,15 +359,25 @@ impl LLM for Gemini {
                     .await?;
 
                 // Store this response in context
-                cache.contents.push(response.candidates[0].content.clone());
+                if let Some(candidate) = response.candidates.first() {
+                    debug!(discord_user_id = %discord_user_id, "Pushing next assistant response to cache");
+                    cache.contents.push(candidate.content.clone());
+                }
             } else {
+                info!(
+                    discord_user_id = %discord_user_id,
+                    tool_call_count = tool_call_count,
+                    "No more tool calls, exiting loop"
+                );
                 break;
             }
         }
 
+        debug!(discord_user_id = %discord_user_id, "Storing final cache");
         self.cached_context
             .insert(discord_user_id.to_owned(), cache.clone());
 
+        debug!(discord_user_id = %discord_user_id, "Extracting final text from cache");
         self.extract_final_text(&cache.contents)
     }
 
@@ -335,7 +386,9 @@ impl LLM for Gemini {
             discord_user_id,
             SpellsWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的法术相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的法术相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些法术信息并移除对话上下文的缓存",
         )
@@ -347,7 +400,9 @@ impl LLM for Gemini {
             discord_user_id,
             AbilitiesWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的能力相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的能力相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些能力信息并移除对话上下文的缓存",
         )
@@ -359,7 +414,9 @@ impl LLM for Gemini {
             discord_user_id,
             SkillsWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的技能相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的技能相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些技能信息并移除对话上下文的缓存",
         )
@@ -371,7 +428,9 @@ impl LLM for Gemini {
             discord_user_id,
             TraitsWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的特性相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的特性相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些特性信息并移除对话上下文的缓存",
         )
@@ -383,7 +442,9 @@ impl LLM for Gemini {
             discord_user_id,
             NotesWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的笔记相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的笔记相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些笔记信息并移除对话上下文的缓存",
         )
@@ -438,7 +499,9 @@ impl LLM for Gemini {
             discord_user_id,
             Meta::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的元数据相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的元数据相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些元数据信息并移除对话上下文的缓存",
         )
@@ -450,7 +513,9 @@ impl LLM for Gemini {
             discord_user_id,
             IdentityWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的身份相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的身份相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些身份信息并移除对话上下文的缓存",
         )
@@ -465,7 +530,9 @@ impl LLM for Gemini {
             discord_user_id,
             ProgressionWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的进度相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的进度相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些进度信息并移除对话上下文的缓存",
         )
@@ -477,7 +544,9 @@ impl LLM for Gemini {
             discord_user_id,
             CombatWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的战斗相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的战斗相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些战斗信息并移除对话上下文的缓存",
         )
@@ -489,7 +558,9 @@ impl LLM for Gemini {
             discord_user_id,
             InventoryWithDiscordId::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的物品栏相关信息，\
+            你需要用中文引导用户提供的资料录入该角色的物品栏相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入， \
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些物品栏信息并移除对话上下文的缓存",
         )
