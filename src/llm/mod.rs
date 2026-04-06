@@ -13,8 +13,6 @@ pub trait LLM: Send + Sync {
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
-    async fn dispatch(&self, tool_call: serde_json::Value) -> Result<String, LlmError>;
-
     async fn conversation_continue(
         &mut self,
         discord_user_id: &str,
@@ -24,56 +22,47 @@ pub trait LLM: Send + Sync {
     async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError>;
 
     async fn add_character_identity(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_progression(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_combat(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_inventory(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_spells(
-        &self,
-        content: &str,
+        &mut self,
         discord_user_id: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_abilities(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_skills(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_traits(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_notes(
-        &self,
+        &mut self,
         discord_user_id: &str,
-        discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 }

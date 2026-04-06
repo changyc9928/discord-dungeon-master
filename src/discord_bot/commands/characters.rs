@@ -27,10 +27,7 @@ pub async fn add_character_meta(ctx: Context<'_>) -> Result<(), DiscordBotError>
 
 /// Adds characters identity information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_identity(
-    ctx: Context<'_>,
-    identity_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_identity(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -40,7 +37,7 @@ pub async fn add_character_identity(
     let response = llm
         .lock()
         .await
-        .add_character_identity(ctx.author().id.to_string().as_str(), &identity_description)
+        .add_character_identity(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -52,10 +49,7 @@ pub async fn add_character_identity(
 
 /// Adds characters progression information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_progression(
-    ctx: Context<'_>,
-    progression_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_progression(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -65,10 +59,7 @@ pub async fn add_character_progression(
     let response = llm
         .lock()
         .await
-        .add_character_progression(
-            ctx.author().id.to_string().as_str(),
-            &progression_description,
-        )
+        .add_character_progression(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -80,10 +71,7 @@ pub async fn add_character_progression(
 
 /// Adds characters combat information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_combat(
-    ctx: Context<'_>,
-    combat_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_combat(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -93,7 +81,7 @@ pub async fn add_character_combat(
     let response = llm
         .lock()
         .await
-        .add_character_combat(ctx.author().id.to_string().as_str(), &combat_description)
+        .add_character_combat(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -105,10 +93,7 @@ pub async fn add_character_combat(
 
 /// Adds characters inventory information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_inventory(
-    ctx: Context<'_>,
-    inventory_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_inventory(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -118,7 +103,7 @@ pub async fn add_character_inventory(
     let response = llm
         .lock()
         .await
-        .add_character_inventory(ctx.author().id.to_string().as_str(), &inventory_description)
+        .add_character_inventory(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -130,10 +115,7 @@ pub async fn add_character_inventory(
 
 /// Adds characters spell information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_spells(
-    ctx: Context<'_>,
-    spell_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_spells(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -143,7 +125,7 @@ pub async fn add_character_spells(
     let response = llm
         .lock()
         .await
-        .add_character_spells(&spell_description, ctx.author().id.to_string().as_str())
+        .add_character_spells(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -155,10 +137,7 @@ pub async fn add_character_spells(
 
 /// Adds characters abilities information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_abilities(
-    ctx: Context<'_>,
-    abilities_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_abilities(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -168,7 +147,7 @@ pub async fn add_character_abilities(
     let response = llm
         .lock()
         .await
-        .add_character_abilities(ctx.author().id.to_string().as_str(), &abilities_description)
+        .add_character_abilities(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -180,10 +159,7 @@ pub async fn add_character_abilities(
 
 /// Adds characters skills information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_skills(
-    ctx: Context<'_>,
-    skills_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_skills(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -193,7 +169,7 @@ pub async fn add_character_skills(
     let response = llm
         .lock()
         .await
-        .add_character_skills(ctx.author().id.to_string().as_str(), &skills_description)
+        .add_character_skills(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -205,10 +181,7 @@ pub async fn add_character_skills(
 
 /// Adds characters traits information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_traits(
-    ctx: Context<'_>,
-    traits_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_traits(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -218,7 +191,7 @@ pub async fn add_character_traits(
     let response = llm
         .lock()
         .await
-        .add_character_traits(ctx.author().id.to_string().as_str(), &traits_description)
+        .add_character_traits(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -230,10 +203,7 @@ pub async fn add_character_traits(
 
 /// Adds characters notes information to the game
 #[poise::command(slash_command)]
-pub async fn add_character_notes(
-    ctx: Context<'_>,
-    notes_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_notes(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -243,7 +213,7 @@ pub async fn add_character_notes(
     let response = llm
         .lock()
         .await
-        .add_character_notes(ctx.author().id.to_string().as_str(), &notes_description)
+        .add_character_notes(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);

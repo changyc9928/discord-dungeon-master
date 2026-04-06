@@ -46,7 +46,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
         service_config.config.gemini_model.clone(),
-        Arc::clone(&character_sheet_service),
         tool_service,
         service_config.config.dm_id.clone(),
     )?));

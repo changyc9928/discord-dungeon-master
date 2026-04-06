@@ -70,7 +70,7 @@ pub enum ToolCall {
     AddCharacterInventory(InventoryWithDiscordId),
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct IdentityWithDiscordId {
@@ -78,7 +78,7 @@ pub struct IdentityWithDiscordId {
     pub identity: Identity,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct ProgressionWithDiscordId {
@@ -86,7 +86,7 @@ pub struct ProgressionWithDiscordId {
     pub progression: Progression,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct CombatWithDiscordId {
@@ -94,7 +94,7 @@ pub struct CombatWithDiscordId {
     pub combat: Combat,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct AbilitiesWithDiscordId {
@@ -102,7 +102,7 @@ pub struct AbilitiesWithDiscordId {
     pub abilities: AbilitiesBlock,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct SkillsWithDiscordId {
@@ -110,7 +110,7 @@ pub struct SkillsWithDiscordId {
     pub skills: SkillsBlock,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct TraitsWithDiscordId {
@@ -118,7 +118,7 @@ pub struct TraitsWithDiscordId {
     pub traits: Traits,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct NotesWithDiscordId {
@@ -126,7 +126,7 @@ pub struct NotesWithDiscordId {
     pub notes: Notes,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct InventoryWithDiscordId {
@@ -134,7 +134,7 @@ pub struct InventoryWithDiscordId {
     pub inventory: Inventory,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SpellsWithDiscordId {
     pub discord_id: String,
