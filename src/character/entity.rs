@@ -47,7 +47,7 @@ pub struct CharacterSheet {
     pub notes: Notes,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Meta {

@@ -18,18 +18,6 @@ pub struct BufferedMessage {
     pub start_time: DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone)]
-pub struct CachedConversation {
-    pub user_discord_id: String,
-    pub action: Action,
-}
-
-#[derive(Debug, Clone)]
-pub enum Action {
-    AddingNewCharacterMeta,
-    AddingNewCharacterIdentity,
-}
-
 #[derive(Clone)]
 pub struct Data {
     pub llm: Arc<Mutex<dyn LLM>>,
@@ -41,7 +29,6 @@ pub struct Data {
     pub buffered_messages: Arc<tokio::sync::Mutex<Vec<BufferedMessage>>>,
     pub flush_sender: mpsc::UnboundedSender<()>,
     pub character_sheet_service: Arc<CharacterSheetService>,
-    pub cache: Vec<CachedConversation>,
 }
 
 async fn event_handler(
@@ -87,18 +74,16 @@ async fn event_handler(
         if should_flush_buffer(data).await? {
             flush_buffer(ctx, data).await;
         }
-    } else {
+    } else if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) {
         let llm = &data.llm;
-        if let Some(action) = data.cache.iter().find(|c| c.user_discord_id == author_id) {
-            match action.action {
-                Action::AddingNewCharacterMeta => {
-                    llm.lock()
-                        .await
-                        .add_character_meta_conv(&author_id, &new_message.content)
-                        .await?;
-                }
-                Action::AddingNewCharacterIdentity => todo!(),
-            }
+        let response = llm
+            .lock()
+            .await
+            .conversation_continue(&author_id, &new_message.content)
+            .await?;
+        let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
+        if let Err(e) = channel_id.say(ctx, &response).await {
+            eprintln!("Failed to send message: {}", e);
         }
     }
 
@@ -125,7 +110,6 @@ pub async fn start_bot(
             commands: vec![
                 commands::ping::ping(),
                 commands::characters::add_character_meta(),
-                commands::characters::add_character_meta_init(),
                 commands::characters::add_character_identity(),
                 commands::characters::add_character_progression(),
                 commands::characters::add_character_combat(),
@@ -159,7 +143,6 @@ pub async fn start_bot(
                     buffered_messages: Arc::new(tokio::sync::Mutex::new(vec![])),
                     flush_sender: flush_sender_clone,
                     character_sheet_service,
-                    cache: vec![],
                 };
 
                 // Start the periodic buffer check task

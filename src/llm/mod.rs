@@ -15,22 +15,13 @@ pub trait LLM: Send + Sync {
 
     async fn dispatch(&self, tool_call: serde_json::Value) -> Result<String, LlmError>;
 
-    async fn add_character_meta_initiate(
-        &mut self,
-        discord_user_id: &str,
-    ) -> Result<String, LlmError>;
-
-    async fn add_character_meta_conv(
+    async fn conversation_continue(
         &mut self,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
-    async fn add_character_meta(
-        &self,
-        discord_user_id: &str,
-        discord_channel_message: &str,
-    ) -> Result<String, LlmError>;
+    async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError>;
 
     async fn add_character_identity(
         &self,

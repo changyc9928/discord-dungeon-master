@@ -8,13 +8,12 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 
 use crate::{
-    character::entity::Meta,
-    character::service::CharacterSheetService,
+    character::{entity::Meta, service::CharacterSheetService},
     llm::{LLM, error::LlmError},
     tool::{
         service::ToolService,
         types::{
-            AbilitiesWithDiscordId, CombatWithDiscordId, IdentityWithDiscordId,
+            AbilitiesWithDiscordId, CombatWithDiscordId, GetToolInfo, IdentityWithDiscordId,
             InventoryWithDiscordId, NotesWithDiscordId, ProgressionWithDiscordId,
             SkillsWithDiscordId, SpellsWithDiscordId, ToolCall, TraitsWithDiscordId,
         },
@@ -51,7 +50,7 @@ impl Gemini {
         })
     }
 
-    fn clean_schema(value: &mut serde_json::Value) {
+    fn clean_schema(&self, value: &mut serde_json::Value) {
         if let Some(obj) = value.as_object_mut() {
             if let Some(t) = obj.get_mut("type") {
                 if let Some(arr) = t.as_array() {
@@ -62,7 +61,7 @@ impl Gemini {
                 }
             }
             for v in obj.values_mut() {
-                Self::clean_schema(v);
+                self.clean_schema(v);
             }
         }
     }
@@ -75,7 +74,7 @@ impl Gemini {
     ) -> Result<String, LlmError> {
         let schema = schemars::schema_for!(T);
         let mut schema = serde_json::to_value(&schema).unwrap();
-        Self::clean_schema(&mut schema);
+        self.clean_schema(&mut schema);
 
         let mut contents = GenerateContentRequest {
             contents: vec![Content {
@@ -280,7 +279,7 @@ impl Gemini {
     }
 
     /// Helper to extract final text from response content
-    fn extract_final_text(contents: &[Content]) -> Result<String, LlmError> {
+    fn extract_final_text(&mut self, contents: &[Content]) -> Result<String, LlmError> {
         contents
             .last()
             .ok_or_else(|| LlmError::MissingContent("final response".to_owned()))?
@@ -294,32 +293,79 @@ impl Gemini {
     }
 
     /// Generic tool-calling loop that handles conversation with tools
-    async fn process_tool_calls<F>(
+    async fn insert_initial_cache<F>(
         &mut self,
         discord_user_id: &str,
-        initial_modifier: F,
+        tool_call_object: F,
+        prompt: &str,
     ) -> Result<String, LlmError>
     where
-        F: FnOnce(&mut GenerateContentRequest),
+        F: JsonSchema + GetToolInfo,
     {
-        // Get or create context
-        let context = self
-            .cached_context
-            .entry(discord_user_id.to_owned())
-            .or_insert_with(|| GenerateContentRequest {
-                contents: Vec::new(),
+        let schema = schemars::schema_for!(F);
+        let mut schema = serde_json::to_value(&schema).unwrap();
+        self.clean_schema(&mut schema);
+
+        let tool_info = tool_call_object.get_tool_name();
+
+        let context = GenerateContentRequest {
+            contents: vec![],
+            system_instruction: Some(SystemInstruction {
+                role: "system".to_owned(),
+                parts: vec![Part {
+                    text: Some(prompt.to_owned()),
+                    ..Default::default()
+                }],
+            }),
+            tools: Some(vec![Tool {
+                function_declarations: Some(vec![FunctionDeclaration {
+                    name: tool_info.0,
+                    description: tool_info.1,
+                    parameters: Some(serde_json::json!({
+                        "type": schema.get("type"),
+                        "properties": schema.get("properties"),
+                        "required": schema.get("required"),
+                    })),
+                }]),
+                code_execution: None,
+                google_search_retrieval: None,
+                code_execution_tool: None,
+            }]),
+            ..Default::default()
+        };
+
+        self.cached_context
+            .insert(discord_user_id.to_owned(), context);
+
+        self.conversation_continue(discord_user_id, "Hi").await
+    }
+}
+
+#[async_trait]
+impl LLM for Gemini {
+    async fn conversation_continue(
+        &mut self,
+        discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        let mut cache = match self.cached_context.get(discord_user_id) {
+            Some(c) => c.clone(),
+            None => todo!(),
+        };
+
+        cache.contents.push(Content {
+            parts: vec![Part {
+                text: Some(discord_channel_message.to_owned()),
                 ..Default::default()
-            });
+            }],
+            role: "user".to_owned(),
+        });
 
-        // Apply initial modification (add user message, system instruction, tools, etc.)
-        initial_modifier(context);
-
-        // Initial API call
         let mut response = self
             .client
             .models()
             .by_name(&self.model)
-            .generate_content(context)
+            .generate_content(&cache)
             .await?;
 
         // Tool-calling loop
@@ -343,11 +389,11 @@ impl Gemini {
 
                 // Push assistant's response to context
                 if let Some(candidate) = response.candidates.first() {
-                    context.contents.push(candidate.content.clone());
+                    cache.contents.push(candidate.content.clone());
                 }
 
                 // Push tool response to context
-                context.contents.push(Content {
+                cache.contents.push(Content {
                     role: "tool".to_string(),
                     parts: vec![Part {
                         function_response: Some(FunctionResponse {
@@ -363,168 +409,20 @@ impl Gemini {
                     .client
                     .models()
                     .by_name(&self.model)
-                    .generate_content(context)
+                    .generate_content(&cache)
                     .await?;
 
                 // Store this response in context
-                context.contents.push(response.candidates[0].content.clone());
+                cache.contents.push(response.candidates[0].content.clone());
             } else {
                 break;
             }
         }
 
-        Self::extract_final_text(&context.contents)
-    }
+        self.cached_context
+            .insert(discord_user_id.to_owned(), cache.clone());
 
-    /// Run tool calls on an existing context (for continuing conversations)
-    async fn run_tool_calls_on_existing(
-        client: &Client,
-        model: &str,
-        tool_service: &ToolService,
-        context: &mut GenerateContentRequest,
-    ) -> Result<String, LlmError> {
-        let mut response = client
-            .models()
-            .by_name(model)
-            .generate_content(context)
-            .await?;
-
-        // Tool-calling loop
-        loop {
-            let tool_call = if let Some(candidate) = response.candidates.first() {
-                if let Some(part) = candidate.content.parts.first() {
-                    part.function_call.as_ref()
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            if let Some(tool_call) = tool_call {
-                // Dispatch tool
-                let res = tool_service
-                    .dispatch(serde_json::to_value(tool_call)?)
-                    .await?;
-
-                // Push assistant's response to context
-                if let Some(candidate) = response.candidates.first() {
-                    context.contents.push(candidate.content.clone());
-                }
-
-                // Push tool response to context
-                context.contents.push(Content {
-                    role: "tool".to_string(),
-                    parts: vec![Part {
-                        function_response: Some(FunctionResponse {
-                            name: tool_call.name.clone(),
-                            response: res,
-                        }),
-                        ..Default::default()
-                    }],
-                });
-
-                // Get next response
-                response = client
-                    .models()
-                    .by_name(model)
-                    .generate_content(context)
-                    .await?;
-
-                // Store this response in context
-                context.contents.push(response.candidates[0].content.clone());
-            } else {
-                break;
-            }
-        }
-
-        Self::extract_final_text(&context.contents)
-    }
-}
-
-#[async_trait]
-impl LLM for Gemini {
-    async fn add_character_meta_initiate(
-        &mut self,
-        discord_user_id: &str,
-    ) -> Result<String, LlmError> {
-        let schema = schemars::schema_for!(Meta);
-        let mut schema = serde_json::to_value(&schema).unwrap();
-        Self::clean_schema(&mut schema);
-
-        self.process_tool_calls(discord_user_id, |context| {
-            *context = GenerateContentRequest {
-                contents: vec![Content {
-                    role: "user".to_string(),
-                    parts: vec![Part {
-                        text: Some("Hi".to_string()),
-                        ..Default::default()
-                    }],
-                }],
-                system_instruction: Some(SystemInstruction {
-                    role: "system".to_string(),
-                    parts: vec![Part {
-                        text: Some(
-                            "你是一个龙与地下城2024版本的DM助手，\
-                            你需要根据用户提供的资料录入该角色的元数据相关信息，\
-                            你将使用输入给你的discordId来使用工具，\
-                            录入成功后请总结更新了角色的哪些元数据信息"
-                                .to_string(),
-                        ),
-                        ..Default::default()
-                    }],
-                }),
-                tools: Some(vec![Tool {
-                    function_declarations: Some(vec![FunctionDeclaration {
-                        name: "add_character_meta".to_string(),
-                        description: "".to_string(),
-                        parameters: Some(serde_json::json!({
-                            "type": schema.get("type"),
-                            "properties": schema.get("properties"),
-                            "required": schema.get("required"),
-                        })),
-                    }]),
-                    code_execution: None,
-                    google_search_retrieval: None,
-                    code_execution_tool: None,
-                }]),
-                tool_config: Some(ToolConfig {
-                    function_calling_config: Some(FunctionCallingConfig {
-                        mode: FunctionCallingMode::Auto,
-                        allowed_function_names: None,
-                    }),
-                    code_execution: None,
-                }),
-                ..Default::default()
-            };
-        })
-        .await
-    }
-
-    async fn add_character_meta_conv(
-        &mut self,
-        discord_user_id: &str,
-        discord_channel_message: &str,
-    ) -> Result<String, LlmError> {
-        let cache = self
-            .cached_context
-            .get_mut(discord_user_id)
-            .ok_or(LlmError::MissingContent(discord_user_id.to_owned()))?;
-        cache.contents.push(Content {
-            parts: vec![Part {
-                text: Some(discord_channel_message.to_owned()),
-                ..Default::default()
-            }],
-            role: "user".to_owned(),
-        });
-
-        Self::run_tool_calls_on_existing(
-            &self.client,
-            &self.model,
-            &self.tool_service,
-            cache,
-        )
-        .await
+        self.extract_final_text(&cache.contents)
     }
 
     async fn add_character_spells(
@@ -650,21 +548,14 @@ impl LLM for Gemini {
         .await
     }
 
-    async fn add_character_meta(
-        &self,
-        discord_user_id: &str,
-        discord_channel_message: &str,
-    ) -> Result<String, LlmError> {
-        self.call_with_tool::<Meta>(
-            "add_character_meta",
+    async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
+        self.insert_initial_cache(
+            discord_user_id,
+            Meta::default(),
             "你是一个龙与地下城2024版本的DM助手，\
-            你需要根据用户提供的资料录入该角色的元数据相关信息，\
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些元数据信息",
-            &format!(
-                "发起者ID：{}；内容：{}",
-                discord_user_id, discord_channel_message
-            ),
+                            你需要根据用户提供的资料录入该角色的元数据相关信息，\
+                            你将使用输入给你的discordId来使用工具，\
+                            录入成功后请总结更新了角色的哪些元数据信息",
         )
         .await
     }

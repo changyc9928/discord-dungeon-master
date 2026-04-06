@@ -24,4 +24,7 @@ pub enum DiscordBotError {
 
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    ParseError(#[from] std::num::ParseIntError),
 }

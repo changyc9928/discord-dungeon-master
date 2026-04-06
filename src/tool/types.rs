@@ -195,10 +195,103 @@ pub struct UpdateCharacterLevelRequest {
     pub level: u64,
 }
 
+pub trait GetToolInfo {
+    fn get_tool_name(&self) -> (String, String);
+}
+
+impl GetToolInfo for Meta {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_meta".to_owned(),
+            "根据用户的 Discord ID 插入角色元数据".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for IdentityWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_identity".to_owned(),
+            "根据用户的 Discord ID 插入角色身份信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for ProgressionWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_progression".to_owned(),
+            "根据用户的 Discord ID 插入角色进阶信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for CombatWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_combat".to_owned(),
+            "根据用户的 Discord ID 插入角色战斗信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for AbilitiesWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_abilities".to_owned(),
+            "根据用户的 Discord ID 插入角色能力信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for SkillsWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_skills".to_owned(),
+            "根据用户的 Discord ID 插入角色技能信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for TraitsWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_traits".to_owned(),
+            "根据用户的 Discord ID 插入角色特性信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for NotesWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_notes".to_owned(),
+            "根据用户的 Discord ID 插入角色笔记信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for InventoryWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_inventory".to_owned(),
+            "根据用户的 Discord ID 插入角色物品栏信息".to_owned(),
+        )
+    }
+}
+
+impl GetToolInfo for SpellsWithDiscordId {
+    fn get_tool_name(&self) -> (String, String) {
+        (
+            "add_character_spells".to_owned(),
+            "根据用户的 Discord ID 插入角色法术信息".to_owned(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::tool::types::SpellsWithDiscordId;
-
 
     #[test]
     fn test_schema() {

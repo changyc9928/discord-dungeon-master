@@ -5,10 +5,7 @@ use crate::discord_bot::handler::Context;
 
 /// Adds characters metadata to the game
 #[poise::command(slash_command)]
-pub async fn add_character_meta(
-    ctx: Context<'_>,
-    meta_description: String,
-) -> Result<(), DiscordBotError> {
+pub async fn add_character_meta(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
@@ -18,29 +15,7 @@ pub async fn add_character_meta(
     let response = llm
         .lock()
         .await
-        .add_character_meta(ctx.author().id.to_string().as_str(), &meta_description)
-        .await?;
-
-    let reply = CreateReply::default().content(response);
-    // 3️⃣ Send follow-up response
-    ctx.send(reply).await?;
-
-    Ok(())
-}
-
-/// Adds characters metadata to the game
-#[poise::command(slash_command)]
-pub async fn add_character_meta_init(ctx: Context<'_>) -> Result<(), DiscordBotError> {
-    // 1️⃣ Defer interaction so Discord doesn't timeout
-    ctx.defer().await?;
-
-    // 2️⃣ Call your LLM
-    let data = ctx.data();
-    let llm = &data.llm;
-    let response = llm
-        .lock()
-        .await
-        .add_character_meta_initiate(&ctx.author().id.to_string())
+        .add_character_meta(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
