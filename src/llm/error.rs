@@ -3,7 +3,9 @@ use crate::character;
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
     #[error(transparent)]
-    GeminiError(#[from] api_gemini::error::Error),
+    VarError(#[from] std::env::VarError),
+    #[error(transparent)]
+    GeminiError(#[from] gemini_rust::ClientError),
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),
     #[error(transparent)]

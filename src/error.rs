@@ -28,5 +28,5 @@ pub enum Error {
     SqlxError(#[from] sqlx::Error),
 
     #[error(transparent)]
-    GeminiError(#[from] api_gemini::error::Error),
+    GeminiError(#[from] gemini_rust::ClientError),
 }

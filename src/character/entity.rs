@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize, ser::StdError};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize, ser::StdError};
 use sqlx::{
     Decode, Encode, Postgres,
     encode::IsNull,
@@ -12,7 +12,9 @@ use strum::Display;
 
 use crate::character::error::CharacterSheetError;
 
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, Display, PartialEq, Eq, PartialOrd, Ord, JsonSchema)]
+#[derive(
+    Debug, Deserialize, Serialize, Clone, Copy, Display, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum Condition {
@@ -32,7 +34,7 @@ pub enum Condition {
     Unconscious,
 }
 
-#[derive(Debug, FromRow, Deserialize, Serialize, Clone)]
+#[derive(Debug, FromRow, Deserialize, Serialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterSheet {
     pub meta: Meta,
@@ -684,7 +686,18 @@ pub struct FeatureTraits {
 }
 
 #[derive(
-    Debug, PartialEq, Eq, Hash, Clone, Copy, Display, Deserialize, Serialize, PartialOrd, Ord, JsonSchema,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Copy,
+    Display,
+    Deserialize,
+    Serialize,
+    PartialOrd,
+    Ord,
+    JsonSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -739,7 +752,17 @@ impl SavingThrows {
 }
 
 #[derive(
-    Debug, Deserialize, Serialize, PartialEq, Eq, Hash, Clone, Copy, Display, PartialOrd, Ord,
+    Debug,
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Eq,
+    Hash,
+    Clone,
+    Copy,
+    Display,
+    PartialOrd,
+    Ord,
     JsonSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
