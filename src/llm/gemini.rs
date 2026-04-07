@@ -9,7 +9,7 @@ use gemini_rust::{Content, FunctionCall, FunctionDeclaration, FunctionResponse, 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::{
     character::entity::{CharacterSheet, Meta},
@@ -30,6 +30,19 @@ const MAIN_FOLLOWUP_PROMPT: &str = include_str!("./../../prompts/main_followup.t
 #[derive(Serialize, Deserialize)]
 struct RemoveCacheRequest {
     discord_id: String,
+}
+
+#[derive(Clone, Debug)]
+enum InternalTool {
+    RemoveCache,
+}
+
+impl InternalTool {
+    fn name(&self) -> &'static str {
+        match self {
+            InternalTool::RemoveCache => "remove_cache",
+        }
+    }
 }
 
 pub struct Gemini {
@@ -55,20 +68,64 @@ impl Gemini {
         })
     }
 
-    fn clean_schema(&self, value: &mut serde_json::Value) {
-        if let Some(obj) = value.as_object_mut() {
-            if let Some(t) = obj.get_mut("type") {
-                if let Some(arr) = t.as_array() {
-                    if arr.len() == 2 && arr.contains(&"null".into()) {
-                        let non_null = arr.iter().find(|v| *v != "null").unwrap();
-                        *t = non_null.clone();
+    /// Extract function calls from content parts into a queue (FIFO)
+    fn extract_function_calls(&self, contents: &[Content]) -> VecDeque<FunctionCall> {
+        let mut queue = VecDeque::new();
+
+        for content in contents {
+            if let Some(parts) = &content.parts {
+                for part in parts {
+                    if let Part::FunctionCall { function_call, .. } = part {
+                        queue.push_back(function_call.clone());
                     }
                 }
             }
-            for v in obj.values_mut() {
-                self.clean_schema(v);
-            }
         }
+
+        queue
+    }
+
+    /// Build a tool with the given function declarations
+    fn build_tool<F, G>(&self, tool_call_object: F, _response_object: G) -> Result<Tool, LlmError>
+    where
+        F: JsonSchema + GetToolInfo + Serialize,
+        G: JsonSchema + Serialize,
+    {
+        let tool_info = tool_call_object.get_tool_name();
+
+        let tool_call = FunctionDeclaration::new(tool_info.0, tool_info.1, None)
+            .with_parameters::<F>()
+            .with_response::<G>();
+
+        let clear_cache = FunctionDeclaration::new(
+            InternalTool::RemoveCache.name(),
+            "对话结束后你能使用这个工具来移除上下文的缓存",
+            None,
+        );
+
+        Ok(Tool::with_functions(vec![tool_call, clear_cache]))
+    }
+
+    /// Initialize context for a new conversation
+    async fn initialize_context(
+        &self,
+        _discord_user_id: &str,
+        prompt: &str,
+        tool: Tool,
+    ) -> Result<Vec<Content>, LlmError> {
+        let response = self
+            .client
+            .generate_content()
+            .with_system_instruction(prompt)
+            .with_tool(tool)
+            .execute()
+            .await?;
+
+        Ok(response
+            .candidates
+            .into_iter()
+            .map(|c| c.content)
+            .collect::<Vec<_>>())
     }
 
     async fn run_with_tools(
@@ -105,7 +162,7 @@ impl Gemini {
         &self,
         text: &str,
     ) -> Result<Option<(String, serde_json::Value, serde_json::Value)>, LlmError> {
-        println!("Parsing tool call from text: {}", text);
+        debug!("Parsing tool call from text: {}", text);
         let Ok(json) = serde_json::from_str::<serde_json::Value>(text) else {
             return Ok(None);
         };
@@ -119,7 +176,7 @@ impl Gemini {
             .and_then(|n| n.as_str())
             .ok_or_else(|| LlmError::InvalidResponse("Missing tool name".into()))?;
 
-        let _args = tool_call
+        let args = tool_call
             .get("arguments")
             .cloned()
             .ok_or_else(|| LlmError::InvalidResponse("Missing arguments".into()))?;
@@ -129,11 +186,11 @@ impl Gemini {
             .cloned()
             .unwrap_or(serde_json::Value::Null);
 
-        Ok(Some((name.to_string(), tool_call.clone(), context)))
+        Ok(Some((name.to_string(), args, context)))
     }
 
-    /// Generic tool-calling loop that handles conversation with tools
-    async fn insert_initial_cache<F, G>(
+    /// Helper method to add a character with a specific tool
+    async fn add_character_with_tool<F, G>(
         &mut self,
         discord_user_id: &str,
         tool_call_object: F,
@@ -144,46 +201,12 @@ impl Gemini {
         F: JsonSchema + GetToolInfo + Serialize,
         G: JsonSchema + Serialize,
     {
-        let schema = schemars::schema_for!(F);
-        let mut schema = serde_json::to_value(&schema).unwrap();
-        self.clean_schema(&mut schema);
+        let tool = self.build_tool(tool_call_object, response_object)?;
 
-        let dummy_instance = RemoveCacheRequest {
-            discord_id: "".to_owned(),
-        };
-        let mut remove_cache_schema = serde_json::to_value(&dummy_instance).unwrap();
-        self.clean_schema(&mut remove_cache_schema);
+        let contents = Self::initialize_context(self, discord_user_id, prompt, tool).await?;
 
-        let tool_info = tool_call_object.get_tool_name();
-
-        let tool_call = FunctionDeclaration::new(tool_info.0, tool_info.1, None)
-            .with_parameters::<F>()
-            .with_response::<G>();
-
-        let clear_cache = FunctionDeclaration::new(
-            "remove_cache",
-            "对话结束后你能使用这个工具来移除上下文的缓存",
-            None,
-        );
-
-        let tool = Tool::with_functions(vec![tool_call, clear_cache]);
-
-        let response = self
-            .client
-            .generate_content()
-            .with_system_instruction(prompt)
-            .with_tool(tool)
-            .execute()
-            .await?;
-
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            response
-                .candidates
-                .into_iter()
-                .map(|c| c.content)
-                .collect::<Vec<_>>(),
-        );
+        self.cached_context
+            .insert(discord_user_id.to_owned(), contents.clone());
 
         self.conversation_continue(
             discord_user_id,
@@ -205,11 +228,10 @@ impl LLM for Gemini {
         let cache = self
             .cached_context
             .get(discord_user_id)
-            .ok_or(LlmError::MissingContent(discord_user_id.to_owned()))?
-            .clone();
+            .ok_or_else(|| LlmError::MissingContent(discord_user_id.to_owned()))?;
 
         let mut request = self.client.generate_content();
-        request.contents.extend(cache);
+        request.contents.extend(cache.iter().cloned());
 
         let response = request
             .with_user_message(discord_channel_message)
@@ -222,48 +244,46 @@ impl LLM for Gemini {
             .map(|c| c.content)
             .collect::<Vec<_>>();
 
+        // Append to cache instead of overwriting
         self.cached_context
-            .insert(discord_user_id.to_owned(), contents.clone());
+            .entry(discord_user_id.to_owned())
+            .and_modify(|existing| existing.extend(contents.iter().cloned()))
+            .or_insert(contents.clone());
 
-        let mut function_queue = VecDeque::<FunctionCall>::new();
-        for content in &contents {
-            if let Some(parts) = &content.parts {
-                for part in parts {
-                    if let Part::FunctionCall { function_call, .. } = part {
-                        function_queue.push_front(function_call.clone());
-                    }
-                    if let Part::FunctionResponse { function_response } = part {
-                        if let Some(last_call) = function_queue.pop_front() {
-                            if last_call.name != function_response.name {
-                                warn!(
-                                    "Warning: Function response name '{}' does not match last function call name '{}'",
-                                    function_response.name, last_call.name
-                                );
-                            }
-                        } else {
-                            warn!(
-                                "Warning: Function response name '{}' has no matching function call",
-                                function_response.name
-                            );
-                        }
-                    }
-                }
-            }
+        let function_queue = self.extract_function_calls(&contents);
+
+        if function_queue.is_empty() {
+            let final_response = contents
+                .first()
+                .and_then(|c| c.parts.as_ref())
+                .and_then(|parts| parts.first())
+                .and_then(|part| match part {
+                    Part::Text { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
+                .ok_or_else(|| LlmError::InvalidResponse("No text response from model".into()))?;
+
+            return Ok(final_response);
         }
 
         let mut reply = self.client.generate_content();
-
         reply.contents.extend(contents);
 
         for function_call in function_queue {
             info!(
-                "Function call received: {} with args:\n{}",
-                function_call.name,
-                serde_json::to_string_pretty(&function_call.args)?
+                discord_user_id = %discord_user_id,
+                tool_name = %function_call.name,
+                "Function call received"
             );
 
-            let res = if function_call.name == "remove_cache" {
-                debug!(discord_user_id = %discord_user_id, "Handling remove_cache special case");
+            debug!(
+                tool_name = %function_call.name,
+                args = %serde_json::to_string_pretty(&function_call.args).unwrap_or_default(),
+                "Tool call details"
+            );
+
+            let res = if function_call.name == InternalTool::RemoveCache.name() {
+                debug!(discord_user_id = %discord_user_id, "Handling remove_cache");
                 let args: RemoveCacheRequest = serde_json::from_value(function_call.args.clone())?;
                 self.cached_context.remove(&args.discord_id);
                 serde_json::to_value(json!({
@@ -276,17 +296,18 @@ impl LLM for Gemini {
                     tool_name = %function_call.name,
                     "Dispatching tool to service"
                 );
-                // Dispatch tool
+
                 let response = self
                     .tool_service
                     .dispatch(serde_json::to_value(&function_call)?)
                     .await;
+
                 match response {
                     Ok(r) => r,
-                    Err(e) => serde_json::to_value(json!(
-                        {   "result": "Error calling tool",
-                            "error": e.to_string()}
-                    ))?,
+                    Err(e) => serde_json::to_value(json!({
+                        "result": "Error calling tool",
+                        "error": e.to_string()
+                    }))?,
                 }
             };
 
@@ -299,17 +320,18 @@ impl LLM for Gemini {
             reply.contents.push(content);
         }
 
-        info!("Sending function response...",);
+        info!(discord_user_id = %discord_user_id, "Sending function responses to model");
 
         let final_response = reply.execute().await?;
 
-        info!("Final response from model: {}", final_response.text(),);
+        let response_text = final_response.text();
+        info!(discord_user_id = %discord_user_id, response = %response_text, "Final response from model");
 
-        Ok(final_response.text())
+        Ok(response_text)
     }
 
     async fn add_character_spells(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             SpellsWithDiscordId::default(),
             CharacterSheet::default(),
@@ -324,7 +346,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_abilities(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             AbilitiesWithDiscordId::default(),
             CharacterSheet::default(),
@@ -339,7 +361,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_skills(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             SkillsWithDiscordId::default(),
             CharacterSheet::default(),
@@ -354,7 +376,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_traits(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             TraitsWithDiscordId::default(),
             CharacterSheet::default(),
@@ -369,7 +391,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_notes(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             NotesWithDiscordId::default(),
             CharacterSheet::default(),
@@ -383,24 +405,8 @@ impl LLM for Gemini {
         .await
     }
 
-    async fn request_to_llm(
-        &self,
-        discord_user_id: &str,
-        discord_channel_message: &str,
-    ) -> Result<String, LlmError> {
-        self.run_with_tools(discord_channel_message, |name, result, context| {
-            MAIN_FOLLOWUP_PROMPT
-                .to_string()
-                .replace("{discord_channel_message}", discord_channel_message)
-                .replace("{tool_name}", name)
-                .replace("{tool_result}", result)
-                .replace("{context}", &context.to_string())
-        })
-        .await
-    }
-
     async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             Meta::default(),
             CharacterSheet::default(),
@@ -415,7 +421,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_identity(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             IdentityWithDiscordId::default(),
             CharacterSheet::default(),
@@ -433,7 +439,7 @@ impl LLM for Gemini {
         &mut self,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             ProgressionWithDiscordId::default(),
             CharacterSheet::default(),
@@ -448,7 +454,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_combat(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             CombatWithDiscordId::default(),
             CharacterSheet::default(),
@@ -463,7 +469,7 @@ impl LLM for Gemini {
     }
 
     async fn add_character_inventory(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.insert_initial_cache(
+        self.add_character_with_tool(
             discord_user_id,
             InventoryWithDiscordId::default(),
             CharacterSheet::default(),
@@ -474,6 +480,22 @@ impl LLM for Gemini {
             你将使用输入给你的discordId来使用工具，\
             录入成功后请总结更新了角色的哪些物品栏信息并移除对话上下文的缓存",
         )
+        .await
+    }
+
+    async fn request_to_llm(
+        &self,
+        _discord_user_id: &str,
+        discord_channel_message: &str,
+    ) -> Result<String, LlmError> {
+        self.run_with_tools(discord_channel_message, |name, result, context| {
+            MAIN_FOLLOWUP_PROMPT
+                .to_string()
+                .replace("{discord_channel_message}", discord_channel_message)
+                .replace("{tool_name}", name)
+                .replace("{tool_result}", result)
+                .replace("{context}", &context.to_string())
+        })
         .await
     }
 }
