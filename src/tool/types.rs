@@ -1,9 +1,18 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::character::entity::{
-    AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Item, Magic, Meta, Notes,
-    Progression, SkillsBlock, Spell, Traits,
+use crate::character::entities::{
+    CharacterSheet,
+    abilities_block::AbilitiesBlock,
+    combat::Combat,
+    identity::Identity,
+    inventory::{Inventory, Item},
+    magic::{Magic, Spell},
+    meta::Meta,
+    notes::Notes,
+    progression::Progression,
+    skills::Skills,
+    traits::Traits,
 };
 
 #[derive(Deserialize)]
@@ -107,7 +116,7 @@ pub struct AbilitiesWithDiscordId {
 #[schemars(inline)]
 pub struct SkillsWithDiscordId {
     pub discord_id: String,
-    pub skills: SkillsBlock,
+    pub skills: Skills,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
@@ -136,6 +145,7 @@ pub struct InventoryWithDiscordId {
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
+
 pub struct SpellsWithDiscordId {
     pub discord_id: String,
     pub spells: Magic,
@@ -164,6 +174,7 @@ pub struct RemoveItemRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+
 pub struct AddSpellRequest {
     pub discord_id: String,
     pub spell: Spell,
@@ -172,27 +183,27 @@ pub struct AddSpellRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateSpellSlotsRequest {
     pub discord_id: String,
-    pub level: u64,
-    pub slot: u64,
-    pub used: u64,
+    pub level: i64,
+    pub slot: i64,
+    pub used: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateCurrentHpRequest {
     pub discord_id: String,
-    pub current_hp: u64,
+    pub current_hp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateMaxHpRequest {
     pub discord_id: String,
-    pub max_hp: u64,
+    pub max_hp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateCharacterLevelRequest {
     pub discord_id: String,
-    pub level: u64,
+    pub level: i64,
 }
 
 pub trait GetToolInfo {

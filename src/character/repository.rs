@@ -1,9 +1,10 @@
 use sqlx::PgPool;
 
 use crate::character::{
-    entity::{
-        AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Magic, Meta, Notes,
-        Progression, SkillsBlock, Traits,
+    entities::{
+        CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
+        inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
+        skills::Skills, traits::Traits,
     },
     error::CharacterSheetError,
 };
@@ -60,7 +61,7 @@ impl CharacterSheetRepository {
         .bind(&character_sheet.progression)
         .bind(&character_sheet.combat)
         .bind(&character_sheet.abilities_block)
-        .bind(&character_sheet.skills_block)
+        .bind(&character_sheet.skills)
         .bind(&character_sheet.magic)
         .bind(&character_sheet.inventory)
         .bind(&character_sheet.traits)
@@ -101,7 +102,7 @@ impl CharacterSheetRepository {
         .bind(Progression::default())
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
-        .bind(SkillsBlock::default())
+        .bind(Skills::default())
         .bind(Magic::default())
         .bind(Inventory::default())
         .bind(Traits::default())
@@ -256,7 +257,7 @@ impl CharacterSheetRepository {
 
     pub async fn update_character_skills(
         &self,
-        skills: &SkillsBlock,
+        skills: &Skills,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         println!(

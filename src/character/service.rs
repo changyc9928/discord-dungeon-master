@@ -1,9 +1,18 @@
 use std::sync::Arc;
 
 use crate::character::{
-    entity::{
-        AbilitiesBlock, CharacterSheet, Combat, Identity, Inventory, Item, Magic, Meta,
-        Notes, Progression, SkillsBlock, Spell, SpellSlot, Traits,
+    entities::{
+        CharacterSheet,
+        abilities_block::AbilitiesBlock,
+        combat::Combat,
+        identity::Identity,
+        inventory::{Inventory, Item},
+        magic::{Magic, Spell, SpellSlot},
+        meta::Meta,
+        notes::Notes,
+        progression::Progression,
+        skills::Skills,
+        traits::Traits,
     },
     error::CharacterSheetError,
     repository::CharacterSheetRepository,
@@ -20,10 +29,10 @@ impl CharacterSheetService {
     ) -> Result<CharacterSheet, CharacterSheetError> {
         character_sheet.progression.update_progression();
         character_sheet.abilities_block.update_abilities();
-        character_sheet.skills_block.skills.update_skills(
+        character_sheet.skills.update_skills(
             &character_sheet.abilities_block,
             character_sheet.progression.proficiencies.proficiency_bonus,
-        )?;
+        );
         character_sheet.combat.saving_throws.update_savings(
             &character_sheet.abilities_block,
             character_sheet.progression.proficiencies.proficiency_bonus,
@@ -134,7 +143,7 @@ impl CharacterSheetService {
     pub async fn add_character_inventory(
         &self,
         discord_id: &str,
-        item: Inventory,
+        item: &Inventory,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         println!(
             "Adding character inventory for discord_id {}: {:?}",
@@ -166,13 +175,15 @@ impl CharacterSheetService {
             "Adding character abilities for discord_id {}: {:?}",
             discord_id, abilities
         );
-        self.repo.update_character_abilities(&abilities, discord_id).await
+        self.repo
+            .update_character_abilities(&abilities, discord_id)
+            .await
     }
 
     pub async fn add_character_skills(
         &self,
         discord_id: &str,
-        skills: SkillsBlock,
+        skills: &Skills,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         println!(
             "Adding character skills for discord_id {}: {:?}",
@@ -184,7 +195,7 @@ impl CharacterSheetService {
     pub async fn add_character_traits(
         &self,
         discord_id: &str,
-        traits: Traits,
+        traits: &Traits,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         println!(
             "Adding character traits for discord_id {}: {:?}",
@@ -196,7 +207,7 @@ impl CharacterSheetService {
     pub async fn add_character_notes(
         &self,
         discord_id: &str,
-        notes: Notes,
+        notes: &Notes,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         println!(
             "Adding character notes for discord_id {}: {:?}",
@@ -208,10 +219,10 @@ impl CharacterSheetService {
     pub async fn add_item(
         &self,
         discord_id: &str,
-        item: Item,
+        item: &Item,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
-        character.inventory.items.push(item);
+        character.inventory.items.push(item.clone());
         character.inventory.items.sort_by_key(|f| f.name.clone());
         self.upsert_character(character).await
     }
@@ -232,10 +243,10 @@ impl CharacterSheetService {
     pub async fn add_spell(
         &self,
         discord_id: &str,
-        spell: Spell,
+        spell: &Spell,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
-        character.magic.spells.spells.push(spell);
+        character.magic.spells.spells.push(spell.clone());
         character
             .magic
             .spells
@@ -247,9 +258,9 @@ impl CharacterSheetService {
     pub async fn update_spell_slots(
         &self,
         discord_id: &str,
-        level: u64,
-        slot: u64,
-        used: u64,
+        level: i64,
+        slot: i64,
+        used: i64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
 
@@ -280,7 +291,7 @@ impl CharacterSheetService {
     pub async fn update_current_hp(
         &self,
         discord_id: &str,
-        current_hp: u64,
+        current_hp: i64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
         character.combat.hit_points = current_hp;
@@ -290,7 +301,7 @@ impl CharacterSheetService {
     pub async fn update_max_hp(
         &self,
         discord_id: &str,
-        max_hp: u64,
+        max_hp: i64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
         character.progression.max_hp = max_hp;
@@ -300,7 +311,7 @@ impl CharacterSheetService {
     pub async fn update_character_level(
         &self,
         discord_id: &str,
-        level: u64,
+        level: i64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
         character.progression.level = level;
@@ -311,17 +322,24 @@ impl CharacterSheetService {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, error::Error, sync::Arc};
+    use std::{error::Error, sync::Arc};
 
     use insta::assert_json_snapshot;
 
     use crate::{
         character::{
-            entity::{
-                AbilitiesBlock, Ability, AbilityScore, Action, CharacterSheet, Characteristics,
-                Combat, CombatAction, Defenses, FeatureTraits, Identity, Inventory, Item, Magic,
-                Meta, Notes, ProficianciesTrainings, Progression, SavingThrows, Sense, Skill,
-                SkillStatus, Skills, SkillsBlock, Speed, Spell, SpellSlot, Spells, Traits,
+            entities::{
+                Ability, CharacterSheet,
+                abilities_block::{AbilitiesBlock, AbilityScore},
+                combat::{Action, Combat, CombatAction, Defenses, SavingThrows, Sense, Speed},
+                identity::{Characteristics, Identity},
+                inventory::{Inventory, Item},
+                magic::{Magic, Spell, SpellSlot, Spells},
+                meta::Meta,
+                notes::Notes,
+                progression::{ProficianciesTrainings, Progression},
+                skills::{SkillStatus, Skills},
+                traits::{FeatureTraits, Traits},
             },
             repository::CharacterSheetRepository,
             service::CharacterSheetService,
@@ -354,7 +372,8 @@ mod test {
                     background_feature_description: "Thanks to your noble birth, \
                         people are inclined to think the best of you. \
                         You are welcome in high society, \
-                        and people assume you have the right to be wherever you are. \
+                        and people assume you have the right \
+                        to be wherever you are. \
                         The common folk make every effort to accommodate you and \
                         avoid your displeasure, and other people of high birth \
                         treat you as a member of the same social sphere. \
@@ -434,7 +453,12 @@ mod test {
                 exhaustion_level: 0,
                 saving_throws: SavingThrows {
                     proficiency: vec![Ability::Constitution, Ability::Charisma],
-                    saving_sets: BTreeMap::new(),
+                    constitution_saving_throws: 0,
+                    strength_saving_throws: 0,
+                    intelligence_saving_throws: 0,
+                    dexterity_saving_throws: 0,
+                    wisdom_saving_throws: 0,
+                    charisma_saving_throws: 0,
                 },
                 actions: vec![
                     Action {
@@ -476,83 +500,140 @@ mod test {
                     },
                 ],
             },
-            abilities_block:AbilitiesBlock {
-                abilities: BTreeMap::from([
-                    (
-                        Ability::Strength,
-                        AbilityScore {
-                            base: 8,
-                            modifier: 0,
-                        },
-                    ),
-                    (
-                        Ability::Dexterity,
-                        AbilityScore {
-                            base: 14,
-                            modifier: 0,
-                        },
-                    ),
-                    (
-                        Ability::Constitution,
-                        AbilityScore {
-                            base: 14,
-                            modifier: 0,
-                        },
-                    ),
-                    (
-                        Ability::Intelligence,
-                        AbilityScore {
-                            base: 10,
-                            modifier: 0,
-                        },
-                    ),
-                    (
-                        Ability::Wisdom,
-                        AbilityScore {
-                            base: 11,
-                            modifier: 0,
-                        },
-                    ),
-                    (
-                        Ability::Charisma,
-                        AbilityScore {
-                            base: 17,
-                            modifier: 0,
-                        },
-                    ),
-                ]),
+            abilities_block: AbilitiesBlock {
+                strength: AbilityScore {
+                    base: 8,
+                    modifier: 0,
+                },
+                dexterity: AbilityScore {
+                    base: 14,
+                    modifier: 0,
+                },
+                constitution: AbilityScore {
+                    base: 14,
+                    modifier: 0,
+                },
+                intelligence: AbilityScore {
+                    base: 10,
+                    modifier: 0,
+                },
+                wisdom: AbilityScore {
+                    base: 11,
+                    modifier: 0,
+                },
+                charisma: AbilityScore {
+                    base: 17,
+                    modifier: 0,
+                },
             },
-            skills_block: SkillsBlock {
-                skills: Skills {
-                    skills: BTreeMap::from([
-                        (
-                            Skill::Acrobatics,
-                            SkillStatus {
-                                prof: false,
-                                bonus: 0,
-                                modifier: Ability::Dexterity,
-                                passive: 0,
-                            },
-                        ),
-                        (
-                            Skill::AnimalHandling,
-                            SkillStatus {
-                                prof: false,
-                                bonus: 0,
-                                modifier: Ability::Wisdom,
-                                passive: 0,
-                            },
-                        ),
-                        (
-                            Skill::Arcana,
-                            SkillStatus {
-                                prof: true,
-                                bonus: 0,
-                                modifier: Ability::Intelligence,
-                                passive: 0,
-                            },
-                        ),
-                    ]),
+            skills: Skills {
+                acrobatics: SkillStatus {
+                    prof: false,
+                    bonus: 2,
+                    modifier: Ability::Dexterity,
+                    passive: 0,
+                },
+                animal_handling: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Wisdom,
+                    passive: 0,
+                },
+                arcana: SkillStatus {
+                    prof: true,
+                    bonus: 2,
+                    modifier: Ability::Intelligence,
+                    passive: 0,
+                },
+                athletics: SkillStatus {
+                    prof: false,
+                    bonus: -1,
+                    modifier: Ability::Strength,
+                    passive: 0,
+                },
+                deception: SkillStatus {
+                    prof: false,
+                    bonus: 3,
+                    modifier: Ability::Charisma,
+                    passive: 0,
+                },
+                history: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Intelligence,
+                    passive: 0,
+                },
+                insight: SkillStatus {
+                    prof: true,
+                    bonus: 2,
+                    modifier: Ability::Wisdom,
+                    passive: 0,
+                },
+                intimidation: SkillStatus {
+                    prof: true,
+                    bonus: 5,
+                    modifier: Ability::Charisma,
+                    passive: 0,
+                },
+                investigation: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Intelligence,
+                    passive: 0,
+                },
+                medicine: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Wisdom,
+                    passive: 0,
+                },
+                nature: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Intelligence,
+                    passive: 0,
+                },
+                perception: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Wisdom,
+                    passive: 0,
+                },
+                performance: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Charisma,
+                    passive: 0,
+                },
+                persuasion: SkillStatus {
+                    prof: true,
+                    bonus: 0,
+                    modifier: Ability::Charisma,
+                    passive: 0,
+                },
+                religion: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Intelligence,
+                    passive: 0,
+                },
+                sleight_of_hand: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Dexterity,
+                    passive: 0,
+                },
+                stealth: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Dexterity,
+                    passive: 0,
+                },
+                survival: SkillStatus {
+                    prof: false,
+                    bonus: 0,
+                    modifier: Ability::Wisdom,
+                    passive: 0,
                 },
             },
             magic: Magic {
@@ -608,31 +689,37 @@ mod test {
                 features_and_traits: vec![
                     FeatureTraits {
                         name: "Spellcasting Ability".to_owned(),
-                        description:
-                            "Charisma is your spellcasting ability for your sorcerer spells, \
-                            since the power of your magic relies on your ability to project your will \
-                            into the world. You use your Charisma whenever a spell refers to your \
-                            spellcasting ability. In addition, you use your Charisma modifier when \
-                            setting the saving throw DC for a sorcerer spell you cast and when making \
+                        description: "Charisma is your spellcasting ability \
+                            for your sorcerer spells, \
+                            since the power of your magic relies on your \
+                            ability to project your will \
+                            into the world. You use your Charisma whenever \
+                            a spell refers to your \
+                            spellcasting ability. In addition, you use your \
+                            Charisma modifier when \
+                            setting the saving throw DC for a sorcerer spell \
+                            you cast and when making \
                             an attack roll with one.
 
 Spell save DC = 8 + your proficiency bonus + your Charisma modifier
 
 Spell attack modifier = your proficiency bonus + your Charisma modifier"
-                                .to_owned(),
+                            .to_owned(),
                         duration: None,
                         trigger: None,
                         cooldown: None,
                     },
                     FeatureTraits {
                         name: "Dragon Ancestor".to_owned(),
-                        description:
-                            "At 1st level, you choose one type of dragon as your ancestor. \
-                            The damage type associated with each dragon is used by features you gain later.
+                        description: "At 1st level, you choose one type of dragon \
+                            as your ancestor. \
+                            The damage type associated with each dragon is \
+                            used by features you gain later.
 You can speak, read, and write Draconic. Additionally, whenever you make a \
-                            Charisma check when interacting with dragons, your proficiency bonus is \
+                            Charisma check when interacting with dragons, \
+                            your proficiency bonus is \
                             doubled if it applies to the check."
-                                .to_owned(),
+                            .to_owned(),
                         duration: None,
                         trigger: None,
                         cooldown: None,

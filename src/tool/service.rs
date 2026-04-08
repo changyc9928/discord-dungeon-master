@@ -16,7 +16,10 @@ impl ToolService {
         }
     }
 
-    pub async fn dispatch(&self, tool_call: serde_json::Value) -> Result<serde_json::Value, ToolError> {
+    pub async fn dispatch(
+        &self,
+        tool_call: serde_json::Value,
+    ) -> Result<serde_json::Value, ToolError> {
         let tool: ToolCall = serde_json::from_value(tool_call.clone())?;
         Ok(match tool {
             ToolCall::AddCharacterMeta(meta) => serde_json::to_value(
@@ -53,7 +56,7 @@ impl ToolService {
                     self.character_sheet_service
                         .add_character_inventory(
                             &add_character_inventory_request.discord_id,
-                            add_character_inventory_request.inventory,
+                            &add_character_inventory_request.inventory,
                         )
                         .await?,
                 )
@@ -83,7 +86,7 @@ impl ToolService {
             )?,
             ToolCall::AddItem(add_item_request) => serde_json::to_value(
                 self.character_sheet_service
-                    .add_item(&add_item_request.discord_id, add_item_request.item)
+                    .add_item(&add_item_request.discord_id, &add_item_request.item)
                     .await?,
             )?,
             ToolCall::RemoveItem(remove_item_request) => serde_json::to_value(
@@ -96,7 +99,7 @@ impl ToolService {
             )?,
             ToolCall::AddSpell(add_spell_request) => serde_json::to_value(
                 self.character_sheet_service
-                    .add_spell(&add_spell_request.discord_id, add_spell_request.spell)
+                    .add_spell(&add_spell_request.discord_id, &add_spell_request.spell)
                     .await?,
             )?,
             ToolCall::UpdateSpellSlots(update_spell_slots_request) => serde_json::to_value(
@@ -148,7 +151,7 @@ impl ToolService {
                     self.character_sheet_service
                         .add_character_skills(
                             &add_character_skills_request.discord_id,
-                            add_character_skills_request.skills,
+                            &add_character_skills_request.skills,
                         )
                         .await?,
                 )
@@ -158,7 +161,7 @@ impl ToolService {
                     self.character_sheet_service
                         .add_character_traits(
                             &add_character_traits_request.discord_id,
-                            add_character_traits_request.traits,
+                            &add_character_traits_request.traits,
                         )
                         .await?,
                 )
@@ -168,7 +171,7 @@ impl ToolService {
                     self.character_sheet_service
                         .add_character_notes(
                             &add_character_notes_request.discord_id,
-                            add_character_notes_request.notes,
+                            &add_character_notes_request.notes,
                         )
                         .await?,
                 )

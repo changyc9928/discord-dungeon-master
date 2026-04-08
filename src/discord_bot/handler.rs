@@ -79,7 +79,7 @@ async fn event_handler(
         let response = llm
             .lock()
             .await
-            .conversation_continue(&author_id, &new_message.content)
+            .conversation_continue(None, &author_id, &new_message.content)
             .await?;
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(e) = channel_id.say(ctx, &response).await {
