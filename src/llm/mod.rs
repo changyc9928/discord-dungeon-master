@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use gemini_rust::ContentBuilder;
 
 use crate::llm::error::LlmError;
 
@@ -16,7 +15,6 @@ pub trait LLM: Send + Sync {
 
     async fn conversation_continue(
         &mut self,
-        request: Option<ContentBuilder>,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;

@@ -53,11 +53,6 @@ async fn event_handler(
         return Ok(());
     }
 
-    println!(
-        "Received message from {}: {}",
-        author_id, new_message.content
-    );
-
     let buffered_message = BufferedMessage {
         content: new_message.content.clone(),
         author_id: author_id.clone(),
@@ -65,7 +60,6 @@ async fn event_handler(
     };
 
     if author_id == data.dm_discord_id {
-        println!("Add message to buffer (DM user)");
         {
             let mut messages = data.buffered_messages.lock().await;
             messages.push(buffered_message);
@@ -79,11 +73,11 @@ async fn event_handler(
         let response = llm
             .lock()
             .await
-            .conversation_continue(None, &author_id, &new_message.content)
+            .conversation_continue(&author_id, &new_message.content)
             .await?;
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(e) = channel_id.say(ctx, &response).await {
-            eprintln!("Failed to send message: {}", e);
+            tracing::error!("Failed to send message: {}", e);
         }
     }
 
@@ -189,7 +183,6 @@ async fn should_flush_buffer(data: &Data) -> Result<bool, DiscordBotError> {
 async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
     let messages = {
         let mut messages = data.buffered_messages.lock().await;
-        println!("Flushing buffer with messages: {:?}", messages);
         if messages.is_empty() {
             return;
         }
@@ -222,17 +215,17 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
             // Send response back to channel
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(e) = channel_id.say(ctx, &response).await {
-                eprintln!("Failed to send message: {}", e);
+                tracing::error!("Failed to send message: {}", e);
             }
         }
         Err(e) => {
-            eprintln!("LLM error: {}", e);
+            tracing::error!("LLM error: {}", e);
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(send_err) = channel_id
                 .say(ctx, format!("Error processing buffered messages: {}", e))
                 .await
             {
-                eprintln!("Failed to send error message: {}", send_err);
+                tracing::error!("Failed to send error message: {}", send_err);
             }
         }
     }

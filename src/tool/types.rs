@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::character::entities::{
+use crate::character::entity::{
     CharacterSheet,
     abilities_block::AbilitiesBlock,
     combat::Combat,
@@ -297,16 +297,5 @@ impl GetToolInfo for SpellsWithDiscordId {
             "add_character_spells".to_owned(),
             "根据用户的 Discord ID 插入角色法术信息".to_owned(),
         )
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::tool::types::SpellsWithDiscordId;
-
-    #[test]
-    fn test_schema() {
-        let schema = schemars::schema_for!(SpellsWithDiscordId);
-        println!("{}", serde_json::to_string_pretty(&schema).unwrap());
     }
 }

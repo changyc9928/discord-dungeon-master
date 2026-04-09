@@ -9,7 +9,7 @@ use sqlx::{
     postgres::{PgArgumentBuffer, PgValueRef},
 };
 
-use crate::character::entities::{Ability, abilities_block::AbilitiesBlock};
+use crate::character::entity::{Ability, abilities_block::AbilitiesBlock};
 
 #[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]

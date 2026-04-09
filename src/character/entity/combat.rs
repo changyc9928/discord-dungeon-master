@@ -10,7 +10,7 @@ use sqlx::{
 };
 use strum::Display;
 
-use crate::character::entities::{Ability, abilities_block::AbilitiesBlock};
+use crate::character::entity::{Ability, abilities_block::AbilitiesBlock};
 
 #[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
@@ -132,7 +132,7 @@ impl SavingThrows {
         self.dexterity_saving_throws = abilities.dexterity.modifier;
         self.wisdom_saving_throws = abilities.wisdom.modifier;
         self.constitution_saving_throws = abilities.constitution.modifier;
-        self.charisma_saving_throws = abilities.constitution.modifier;
+        self.charisma_saving_throws = abilities.charisma.modifier;
 
         for ability in &self.proficiency {
             match ability {

@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::character::{
-    entities::{
+    entity::{
         CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
         inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
         skills::Skills, traits::Traits,
@@ -33,7 +33,7 @@ impl CharacterSheetRepository {
             progression,
             combat,
             abilities_block,
-            skills_block,
+            skills,
             magic,
             inventory,
             traits,
@@ -46,7 +46,7 @@ impl CharacterSheetRepository {
             progression = EXCLUDED.progression,
             combat = EXCLUDED.combat,
             abilities_block = EXCLUDED.abilities_block,
-            skills_block = EXCLUDED.skills_block,
+            skills = EXCLUDED.skills,
             magic = EXCLUDED.magic,
             inventory = EXCLUDED.inventory,
             traits = EXCLUDED.traits,
@@ -84,7 +84,7 @@ impl CharacterSheetRepository {
             progression,
             combat,
             abilities_block,
-            skills_block,
+            skills,
             magic,
             inventory,
             traits,
@@ -116,16 +116,24 @@ impl CharacterSheetRepository {
         identity: &Identity,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character identity for discord_id {}: {:?}",
-            discord_id, identity
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            identity = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            identity = EXCLUDED.identity
         RETURNING *
         "#,
         )
@@ -140,16 +148,24 @@ impl CharacterSheetRepository {
         progression: &Progression,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character progression for discord_id {}: {:?}",
-            discord_id, progression
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            progression = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            progression = EXCLUDED.progression
         RETURNING *
         "#,
         )
@@ -164,16 +180,24 @@ impl CharacterSheetRepository {
         combat: &Combat,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character combat for discord_id {}: {:?}",
-            discord_id, combat
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            combat = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            combat = EXCLUDED.combat
         RETURNING *
         "#,
         )
@@ -188,16 +212,24 @@ impl CharacterSheetRepository {
         inventory: &Inventory,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character inventory for discord_id {}: {:?}",
-            discord_id, inventory
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            inventory = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            inventory = EXCLUDED.inventory
         RETURNING *
         "#,
         )
@@ -212,16 +244,24 @@ impl CharacterSheetRepository {
         spells: &Magic,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character spells for discord_id {}: {:?}",
-            discord_id, spells
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            magic = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            spells = EXCLUDED.spells
         RETURNING *
         "#,
         )
@@ -236,16 +276,24 @@ impl CharacterSheetRepository {
         abilities: &AbilitiesBlock,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character abilities for discord_id {}: {:?}",
-            discord_id, abilities
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            abilities_block = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            abilities = EXCLUDED.abilities
         RETURNING *
         "#,
         )
@@ -260,16 +308,24 @@ impl CharacterSheetRepository {
         skills: &Skills,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character skills for discord_id {}: {:?}",
-            discord_id, skills
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            skills_block = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            skills = EXCLUDED.skills
         RETURNING *
         "#,
         )
@@ -284,16 +340,24 @@ impl CharacterSheetRepository {
         traits: &Traits,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character traits for discord_id {}: {:?}",
-            discord_id, traits
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            traits = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            traits = EXCLUDED.traits
         RETURNING *
         "#,
         )
@@ -308,16 +372,24 @@ impl CharacterSheetRepository {
         notes: &Notes,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Database updating character notes for discord_id {}: {:?}",
-            discord_id, notes
-        );
         Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
-        UPDATE character_sheets
-        SET
-            notes = $1
-        WHERE id = $2
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            notes = EXCLUDED.notes
         RETURNING *
         "#,
         )
@@ -339,7 +411,7 @@ impl CharacterSheetRepository {
             progression,
             combat,
             abilities_block,
-            skills_block,
+            skills,
             magic,
             inventory,
             traits,
@@ -358,7 +430,7 @@ impl CharacterSheetRepository {
         &self,
         character_name: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        let results = sqlx::query_as::<_, CharacterSheet>(
+        Ok(sqlx::query_as::<_, CharacterSheet>(
             r#"
         SELECT
             meta,
@@ -366,7 +438,7 @@ impl CharacterSheetRepository {
             progression,
             combat,
             abilities_block,
-            skills_block,
+            skills,
             magic,
             inventory,
             traits,
@@ -376,16 +448,7 @@ impl CharacterSheetRepository {
         "#,
         )
         .bind(character_name)
-        .fetch_all(&self.pool)
-        .await?;
-
-        match results.len() {
-            0 => Err(sqlx::Error::RowNotFound.into()),
-            1 => Ok(results.into_iter().next().unwrap()),
-            n => Err(CharacterSheetError::MultipleResultsFound(
-                character_name.to_string(),
-                n,
-            )),
-        }
+        .fetch_one(&self.pool)
+        .await?)
     }
 }

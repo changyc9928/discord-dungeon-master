@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::Display;
 
-use crate::character::entities::{
+use crate::character::entity::{
     abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
     magic::Magic, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
     traits::Traits,

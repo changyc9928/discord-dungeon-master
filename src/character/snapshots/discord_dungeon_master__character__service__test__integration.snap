@@ -4,31 +4,29 @@ expression: character_json
 ---
 {
   "abilitiesBlock": {
-    "abilities": {
-      "CHARISMA": {
-        "base": 17,
-        "modifier": 3
-      },
-      "CONSTITUTION": {
-        "base": 14,
-        "modifier": 2
-      },
-      "DEXTERITY": {
-        "base": 14,
-        "modifier": 2
-      },
-      "INTELLIGENCE": {
-        "base": 10,
-        "modifier": 0
-      },
-      "STRENGTH": {
-        "base": 8,
-        "modifier": -1
-      },
-      "WISDOM": {
-        "base": 11,
-        "modifier": 0
-      }
+    "charisma": {
+      "base": 17,
+      "modifier": 3
+    },
+    "constitution": {
+      "base": 14,
+      "modifier": 2
+    },
+    "dexterity": {
+      "base": 14,
+      "modifier": 2
+    },
+    "intelligence": {
+      "base": 10,
+      "modifier": 0
+    },
+    "strength": {
+      "base": 8,
+      "modifier": -1
+    },
+    "wisdom": {
+      "base": 11,
+      "modifier": 0
     }
   },
   "combat": {
@@ -85,18 +83,16 @@ expression: character_json
     "hitPoints": 16,
     "initiative": 2,
     "savingThrows": {
+      "charismaSavingThrows": 5,
+      "constitutionSavingThrows": 4,
+      "dexteritySavingThrows": 2,
+      "intelligenceSavingThrows": 0,
       "proficiency": [
         "CONSTITUTION",
         "CHARISMA"
       ],
-      "savingSets": {
-        "CHARISMA": 5,
-        "CONSTITUTION": 4,
-        "DEXTERITY": 2,
-        "INTELLIGENCE": 0,
-        "STRENGTH": -1,
-        "WISDOM": 0
-      }
+      "strengthSavingThrows": -1,
+      "wisdomSavingThrows": 0
     },
     "senses": [
       {
@@ -232,28 +228,114 @@ expression: character_json
     "totalHitDice": "2d8",
     "xp": 330
   },
-  "skillsBlock": {
-    "skills": {
-      "skills": {
-        "ACROBATICS": {
-          "bonus": 2,
-          "modifier": "DEXTERITY",
-          "passive": 12,
-          "prof": false
-        },
-        "ANIMAL_HANDLING": {
-          "bonus": 0,
-          "modifier": "WISDOM",
-          "passive": 10,
-          "prof": false
-        },
-        "ARCANA": {
-          "bonus": 2,
-          "modifier": "INTELLIGENCE",
-          "passive": 12,
-          "prof": true
-        }
-      }
+  "skills": {
+    "acrobatics": {
+      "bonus": 2,
+      "modifier": "DEXTERITY",
+      "passive": 12,
+      "prof": false
+    },
+    "animalHandling": {
+      "bonus": 0,
+      "modifier": "WISDOM",
+      "passive": 10,
+      "prof": false
+    },
+    "arcana": {
+      "bonus": 2,
+      "modifier": "INTELLIGENCE",
+      "passive": 12,
+      "prof": true
+    },
+    "athletics": {
+      "bonus": -1,
+      "modifier": "STRENGTH",
+      "passive": 9,
+      "prof": false
+    },
+    "deception": {
+      "bonus": 3,
+      "modifier": "CHARISMA",
+      "passive": 13,
+      "prof": false
+    },
+    "history": {
+      "bonus": 0,
+      "modifier": "INTELLIGENCE",
+      "passive": 10,
+      "prof": false
+    },
+    "insight": {
+      "bonus": 2,
+      "modifier": "WISDOM",
+      "passive": 12,
+      "prof": true
+    },
+    "intimidation": {
+      "bonus": 5,
+      "modifier": "CHARISMA",
+      "passive": 15,
+      "prof": true
+    },
+    "investigation": {
+      "bonus": 0,
+      "modifier": "INTELLIGENCE",
+      "passive": 0,
+      "prof": false
+    },
+    "medicine": {
+      "bonus": 0,
+      "modifier": "WISDOM",
+      "passive": 10,
+      "prof": false
+    },
+    "nature": {
+      "bonus": 0,
+      "modifier": "INTELLIGENCE",
+      "passive": 10,
+      "prof": false
+    },
+    "perception": {
+      "bonus": 0,
+      "modifier": "WISDOM",
+      "passive": 10,
+      "prof": false
+    },
+    "performance": {
+      "bonus": 3,
+      "modifier": "CHARISMA",
+      "passive": 13,
+      "prof": false
+    },
+    "persuasion": {
+      "bonus": 5,
+      "modifier": "CHARISMA",
+      "passive": 15,
+      "prof": true
+    },
+    "religion": {
+      "bonus": 0,
+      "modifier": "INTELLIGENCE",
+      "passive": 10,
+      "prof": false
+    },
+    "sleightOfHand": {
+      "bonus": 2,
+      "modifier": "DEXTERITY",
+      "passive": 12,
+      "prof": false
+    },
+    "stealth": {
+      "bonus": 2,
+      "modifier": "DEXTERITY",
+      "passive": 12,
+      "prof": false
+    },
+    "survival": {
+      "bonus": 0,
+      "modifier": "WISDOM",
+      "passive": 10,
+      "prof": false
     }
   },
   "traits": {

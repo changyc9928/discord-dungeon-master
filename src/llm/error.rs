@@ -5,6 +5,8 @@ pub enum LlmError {
     #[error(transparent)]
     VarError(#[from] std::env::VarError),
     #[error(transparent)]
+    CacheError(#[from] gemini_rust::cache::Error),
+    #[error(transparent)]
     GeminiError(#[from] gemini_rust::ClientError),
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::Error),

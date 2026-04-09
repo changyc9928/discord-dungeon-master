@@ -6,7 +6,8 @@ use std::{
 
 use async_trait::async_trait;
 use gemini_rust::{
-    Content, ContentBuilder, FunctionCall, FunctionDeclaration, FunctionResponse, Part, Role, Tool,
+    Content, ContentBuilder, FunctionCall, FunctionDeclaration, FunctionResponse,
+    GenerateContentRequest, Part, Role, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,7 @@ use serde_json::json;
 use tracing::{debug, info, warn};
 
 use crate::{
-    character::entities::{
+    character::entity::{
         abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
         magic::Magic, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
         traits::Traits,
@@ -33,8 +34,14 @@ use crate::{
 const MAIN_PROMPT: &str = include_str!("./../../prompts/main.txt");
 const MAIN_FOLLOWUP_PROMPT: &str = include_str!("./../../prompts/main_followup.txt");
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 struct RemoveCacheRequest {
+    discord_id: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct RemoveCacheResponse {
+    cache_removed: bool,
     discord_id: String,
 }
 
@@ -55,7 +62,7 @@ pub struct Gemini {
     client: gemini_rust::Gemini,
     dm_discord_id: String,
     tool_service: Arc<ToolService>,
-    cached_context: HashMap<String, Vec<Content>>,
+    cached_context: HashMap<String, GenerateContentRequest>,
 }
 
 impl Gemini {
@@ -122,7 +129,9 @@ impl Gemini {
             InternalTool::RemoveCache.name(),
             "对话结束后你能使用这个工具来移除上下文的缓存",
             None,
-        );
+        )
+        .with_parameters::<RemoveCacheRequest>()
+        .with_response::<RemoveCacheResponse>();
 
         Ok(Tool::with_functions(vec![tool_call, clear_cache]))
     }
@@ -188,6 +197,77 @@ impl Gemini {
         Ok(Some((name.to_string(), args, context)))
     }
 
+    fn merge_request(
+        &mut self,
+        ori_request: GenerateContentRequest,
+        discord_user_id: &str,
+    ) -> Result<ContentBuilder, LlmError> {
+        let mut request = self.client.generate_content();
+        let cache = self
+            .cached_context
+            .get(discord_user_id)
+            .cloned()
+            .unwrap_or(self.client.generate_content().build());
+
+        request.contents.extend(cache.contents);
+
+        if let Some(config) = cache.generation_config {
+            request = request.with_generation_config(config);
+        }
+
+        if let Some(config) = cache.tool_config {
+            request = request.with_tool_config(config);
+        }
+
+        if let Some(prompt) = cache.system_instruction {
+            if let Some(part) = prompt.parts {
+                for part in part {
+                    if let Part::Text { text, .. } = part {
+                        request = request.with_system_instruction(text);
+                    }
+                }
+            }
+        }
+
+        if let Some(tool) = cache.tools {
+            for tool in tool {
+                request = request.with_tool(tool);
+            }
+        }
+
+        request.contents.extend(ori_request.contents);
+
+        if let Some(config) = ori_request.generation_config {
+            request = request.with_generation_config(config);
+        }
+
+        if let Some(config) = ori_request.tool_config {
+            request = request.with_tool_config(config);
+        }
+
+        if let Some(prompt) = ori_request.system_instruction {
+            if let Some(part) = prompt.parts {
+                for part in part {
+                    if let Part::Text { text, .. } = part {
+                        request = request.with_system_instruction(text);
+                    }
+                }
+            }
+        }
+
+        if let Some(tool) = ori_request.tools {
+            for tool in tool {
+                request = request.with_tool(tool);
+            }
+        }
+
+        let request_copy = request.clone().build();
+        self.cached_context
+            .insert(discord_user_id.to_owned(), request_copy);
+
+        Ok(request)
+    }
+
     /// Helper method to add a character with a specific tool
     async fn add_character_with_tool<F, G>(
         &mut self,
@@ -206,10 +286,14 @@ impl Gemini {
             .client
             .generate_content()
             .with_tool(tool.clone())
-            .with_system_instruction(prompt);
+            .with_system_instruction(prompt)
+            .build();
+
+        debug!("Request: {:#?}", request);
+
+        self.merge_request(request, discord_user_id)?;
 
         self.conversation_continue(
-            Some(request),
             discord_user_id,
             &format!(
                 "我的Discord ID是{}，你好，请问你需要什么信息？",
@@ -224,33 +308,28 @@ impl Gemini {
 impl LLM for Gemini {
     async fn conversation_continue(
         &mut self,
-        request: Option<ContentBuilder>,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
         info!(discord_user_id = %discord_user_id, "Starting conversation_continue");
 
-        let mut request = if let Some(request) = request {
-            request
-        } else {
-            let cache = self
-                .cached_context
-                .get(discord_user_id)
-                .ok_or_else(|| LlmError::MissingContent(discord_user_id.to_owned()))?;
+        let builder = self
+            .client
+            .generate_content()
+            .with_user_message(discord_channel_message)
+            .build();
 
-            let mut request = self.client.generate_content();
-            request.contents.extend(cache.iter().cloned());
-            request
-        };
+        let cached_content = self.merge_request(builder, discord_user_id)?.build();
+
+        debug!("First cache: {:#?}", cached_content);
 
         loop {
-            let response = request
-                .clone()
-                .with_user_message(discord_channel_message)
-                .execute()
-                .await?;
+            let request = self.client.generate_content().build();
+            let request = self.merge_request(request, discord_user_id)?;
 
-            debug!("Response: {response:#?}");
+            debug!("Full request: {:#?}", request.clone().build());
+
+            let response = request.execute().await?;
 
             let contents = response
                 .candidates
@@ -259,27 +338,19 @@ impl LLM for Gemini {
                 .map(|c| c.content)
                 .collect::<Vec<_>>();
 
-            self.cached_context
-                .entry(discord_user_id.to_owned())
-                .and_modify(|c| c.extend(contents.clone()))
-                .or_insert(contents.clone());
-
-            let contents = self
-                .cached_context
-                .get(discord_user_id)
-                .ok_or(LlmError::MissingContent(discord_user_id.to_owned()))?
-                .clone();
-
-            debug!("Contents: {:#?}", contents);
+            debug!("Responded content: {:#?}", contents);
 
             let function_queue = self.extract_function_calls(&contents);
+
+            let mut new_cache = self.client.generate_content();
+            new_cache.contents.extend(contents);
+            self.merge_request(new_cache.build(), discord_user_id)?;
 
             if function_queue.is_empty() {
                 return Ok(response.text());
             }
 
-            request = self.client.generate_content();
-            request.contents.extend(contents);
+            let mut function_response = self.client.generate_content();
 
             for function_call in function_queue {
                 info!(
@@ -299,10 +370,10 @@ impl LLM for Gemini {
                     let args: RemoveCacheRequest =
                         serde_json::from_value(function_call.args.clone())?;
                     self.cached_context.remove(&args.discord_id);
-                    serde_json::to_value(json!({
-                        "removed_cache": true,
-                        "discord_id": args.discord_id
-                    }))?
+                    serde_json::to_value(RemoveCacheResponse {
+                        cache_removed: true,
+                        discord_id: discord_user_id.to_owned(),
+                    })?
                 } else {
                     debug!(
                         discord_user_id = %discord_user_id,
@@ -330,8 +401,10 @@ impl LLM for Gemini {
                 )?)
                 .with_role(Role::User);
 
-                request.contents.push(content);
+                function_response.contents.push(content);
             }
+
+            self.merge_request(function_response.build(), discord_user_id)?;
         }
     }
 
@@ -411,56 +484,16 @@ impl LLM for Gemini {
     }
 
     async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let system_prompt = r#"你是一个纯数据录入助手，用于将玩家提供的角色信息录入数据库（基于DND 5.5e规则）。
-
-            你的职责仅限于数据收集、校验与写入，禁止执行任何与此无关的行为。
-
-            核心规则：
-
-            1. 只做数据录入
-            - 不进行任何剧情引导
-            - 不扮演DM
-            - 不进行世界观描述或游戏互动
-            - 不提供建议、优化或补全角色构建
-
-            2. 严格信息收集
-            - 玩家首次发言后，你必须列出当前缺失的所有必要元数据字段
-            - 仅针对“缺失字段”逐项提问
-            - 如果信息不完整，必须持续追问，直到所有字段齐全
-            - 不允许跳过字段或默认填充
-
-            3. 规则校验（DND 5.5e）
-            - 对玩家提供的每一项数据进行合法性校验
-            - 若不符合规则，必须明确指出错误并要求重新输入
-            - 不允许替玩家修改或自动纠正
-
-            4. 禁止扩展行为
-            - 不解释规则（除非用于指出错误）
-            - 不提供构建建议
-            - 不进行闲聊
-            - 不总结背景故事
-
-            5. 工具调用
-            - 使用提供的 discordId 调用工具写入数据库
-            - 仅在所有字段完整且全部校验通过后调用工具
-            - 不得提前调用
-
-            6. 写入完成后的行为
-            - 简要列出已成功录入的字段
-            - 明确表示录入完成
-            - 清除对话上下文缓存（不再引用此前对话内容）
-            - 不输出任何额外内容
-
-            输出风格约束：
-            - 始终使用简洁、结构化表达
-            - 优先使用列表列出缺失字段或错误项
-            - 禁止使用情绪化或沉浸式语言"#;
-
         self.add_character_with_tool(
             discord_user_id,
             Meta::default(),
             Meta::default(),
-            system_prompt,
+            "你是一个龙与地下城2024版本的DM助手，\
+            你需要用中文引导用户提供的资料录入该角色元数据相关信息，\
+            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
+            完成全部相关信息的录入，不要询问或关心任何超过角色元数据以外的任何事物， \
+            你将使用输入给你的discordId来使用工具，\
+            录入成功后请总结更新了角色的哪些笔记信息并移除对话上下文的缓存",
         )
         .await
     }

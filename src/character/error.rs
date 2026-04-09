@@ -1,4 +1,4 @@
-use crate::character::entities::Ability;
+use crate::character::entity::Ability;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CharacterSheetError {

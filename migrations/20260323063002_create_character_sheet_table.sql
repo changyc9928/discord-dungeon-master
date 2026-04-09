@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS character_sheets (
 
     -- Nested blocks (all JSONB)
     abilities_block JSONB NOT NULL,
-    skills_block JSONB NOT NULL,
+    skills JSONB NOT NULL,
     magic JSONB NOT NULL,
     inventory JSONB NOT NULL,
     traits JSONB NOT NULL,

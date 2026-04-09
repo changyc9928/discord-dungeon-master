@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::character::{
-    entities::{
+    entity::{
         CharacterSheet,
         abilities_block::AbilitiesBlock,
         combat::Combat,
@@ -105,10 +105,6 @@ impl CharacterSheetService {
         identity: &Identity,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Updating character identity for discord_id {}: {:?}",
-            discord_id, identity
-        );
         self.repo
             .update_character_indentity(identity, discord_id)
             .await
@@ -119,10 +115,6 @@ impl CharacterSheetService {
         progression: &Progression,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Updating character progression for discord_id {}: {:?}",
-            discord_id, progression
-        );
         self.repo
             .update_character_progression(progression, discord_id)
             .await
@@ -133,10 +125,6 @@ impl CharacterSheetService {
         combat: &Combat,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Updating character combat for discord_id {}: {:?}",
-            discord_id, combat
-        );
         self.repo.update_character_combat(combat, discord_id).await
     }
 
@@ -145,10 +133,6 @@ impl CharacterSheetService {
         discord_id: &str,
         item: &Inventory,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character inventory for discord_id {}: {:?}",
-            discord_id, item
-        );
         self.repo
             .update_character_inventory(&item, discord_id)
             .await
@@ -159,10 +143,6 @@ impl CharacterSheetService {
         discord_id: &str,
         spells: &Magic,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character spells for discord_id {}: {:?}",
-            discord_id, spells
-        );
         self.repo.update_character_spells(spells, discord_id).await
     }
 
@@ -171,10 +151,6 @@ impl CharacterSheetService {
         discord_id: &str,
         abilities: AbilitiesBlock,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character abilities for discord_id {}: {:?}",
-            discord_id, abilities
-        );
         self.repo
             .update_character_abilities(&abilities, discord_id)
             .await
@@ -185,10 +161,6 @@ impl CharacterSheetService {
         discord_id: &str,
         skills: &Skills,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character skills for discord_id {}: {:?}",
-            discord_id, skills
-        );
         self.repo.update_character_skills(&skills, discord_id).await
     }
 
@@ -197,10 +169,6 @@ impl CharacterSheetService {
         discord_id: &str,
         traits: &Traits,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character traits for discord_id {}: {:?}",
-            discord_id, traits
-        );
         self.repo.update_character_traits(&traits, discord_id).await
     }
 
@@ -209,10 +177,6 @@ impl CharacterSheetService {
         discord_id: &str,
         notes: &Notes,
     ) -> Result<CharacterSheet, CharacterSheetError> {
-        println!(
-            "Adding character notes for discord_id {}: {:?}",
-            discord_id, notes
-        );
         self.repo.update_character_notes(&notes, discord_id).await
     }
 
@@ -328,7 +292,7 @@ mod test {
 
     use crate::{
         character::{
-            entities::{
+            entity::{
                 Ability, CharacterSheet,
                 abilities_block::{AbilitiesBlock, AbilityScore},
                 combat::{Action, Combat, CombatAction, Defenses, SavingThrows, Sense, Speed},
