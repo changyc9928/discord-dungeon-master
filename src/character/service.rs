@@ -91,93 +91,133 @@ impl CharacterSheetService {
         Ok(entity)
     }
 
-    pub async fn add_character_meta(
-        &self,
-        meta: &Meta,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo
+    pub async fn add_character_meta(&self, meta: &Meta) -> Result<Meta, CharacterSheetError> {
+        let entity = self
+            .repo
             .update_character_meta(meta, &meta.discord_id)
-            .await
+            .await?;
+        Ok(entity.meta)
     }
 
     pub async fn add_character_identity(
         &self,
         identity: &Identity,
         discord_id: &str,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo
+    ) -> Result<Identity, CharacterSheetError> {
+        let entity = self
+            .repo
             .update_character_indentity(identity, discord_id)
-            .await
+            .await?;
+        Ok(entity.identity)
     }
 
     pub async fn add_character_progression(
         &self,
         progression: &Progression,
         discord_id: &str,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo
-            .update_character_progression(progression, discord_id)
-            .await
+    ) -> Result<Progression, CharacterSheetError> {
+        let mut progression = progression.clone();
+        progression.update_progression();
+        let entity = self
+            .repo
+            .update_character_progression(&progression, discord_id)
+            .await?;
+        Ok(entity.progression)
     }
 
     pub async fn add_character_combat(
         &self,
         combat: &Combat,
         discord_id: &str,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo.update_character_combat(combat, discord_id).await
+    ) -> Result<Combat, CharacterSheetError> {
+        let mut combat = combat.clone();
+        let entity = self.repo.get_character_by_discord_id(discord_id).await?;
+        combat.saving_throws.update_savings(
+            &entity.abilities_block,
+            entity.progression.proficiencies.proficiency_bonus,
+        );
+        let entity = self
+            .repo
+            .update_character_combat(&combat, discord_id)
+            .await?;
+        Ok(entity.combat)
     }
 
     pub async fn add_character_inventory(
         &self,
         discord_id: &str,
         item: &Inventory,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo
-            .update_character_inventory(&item, discord_id)
-            .await
+    ) -> Result<Inventory, CharacterSheetError> {
+        let entity = self
+            .repo
+            .update_character_inventory(item, discord_id)
+            .await?;
+        Ok(entity.inventory)
     }
 
     pub async fn add_character_spells(
         &self,
         discord_id: &str,
         spells: &Magic,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo.update_character_spells(spells, discord_id).await
+    ) -> Result<Magic, CharacterSheetError> {
+        let entity = self
+            .repo
+            .update_character_spells(spells, discord_id)
+            .await?;
+        Ok(entity.magic)
     }
 
     pub async fn add_character_abilities(
         &self,
         discord_id: &str,
         abilities: AbilitiesBlock,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo
+    ) -> Result<AbilitiesBlock, CharacterSheetError> {
+        let mut abilities = abilities.clone();
+        abilities.update_abilities();
+        let entity = self
+            .repo
             .update_character_abilities(&abilities, discord_id)
-            .await
+            .await?;
+        Ok(entity.abilities_block)
     }
 
     pub async fn add_character_skills(
         &self,
         discord_id: &str,
         skills: &Skills,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo.update_character_skills(&skills, discord_id).await
+    ) -> Result<Skills, CharacterSheetError> {
+        let mut skills = skills.clone();
+        let entity = self.repo.get_character_by_discord_id(discord_id).await?;
+        skills.update_skills(
+            &entity.abilities_block,
+            entity.progression.proficiencies.proficiency_bonus,
+        );
+        let entity = self
+            .repo
+            .update_character_skills(&skills, discord_id)
+            .await?;
+        Ok(entity.skills)
     }
 
     pub async fn add_character_traits(
         &self,
         discord_id: &str,
         traits: &Traits,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo.update_character_traits(&traits, discord_id).await
+    ) -> Result<Traits, CharacterSheetError> {
+        let entity = self
+            .repo
+            .update_character_traits(traits, discord_id)
+            .await?;
+        Ok(entity.traits)
     }
 
     pub async fn add_character_notes(
         &self,
         discord_id: &str,
         notes: &Notes,
-    ) -> Result<CharacterSheet, CharacterSheetError> {
-        self.repo.update_character_notes(&notes, discord_id).await
+    ) -> Result<Notes, CharacterSheetError> {
+        let entity = self.repo.update_character_notes(notes, discord_id).await?;
+        Ok(entity.notes)
     }
 
     pub async fn add_item(

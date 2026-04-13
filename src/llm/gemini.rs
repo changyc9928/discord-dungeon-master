@@ -114,12 +114,12 @@ impl Gemini {
     }
 
     /// Build a tool with the given function declarations
-    fn build_tool<F, G>(&self, tool_call_object: F, _response_object: G) -> Result<Tool, LlmError>
+    fn build_tool<F, G>(&self) -> Result<Tool, LlmError>
     where
         F: JsonSchema + GetToolInfo + Serialize,
         G: JsonSchema + Serialize,
     {
-        let tool_info = tool_call_object.get_tool_name();
+        let tool_info = F::get_tool_name();
 
         let tool_call = FunctionDeclaration::new(tool_info.0, tool_info.1, None)
             .with_parameters::<F>()
@@ -272,15 +272,13 @@ impl Gemini {
     async fn add_character_with_tool<F, G>(
         &mut self,
         discord_user_id: &str,
-        tool_call_object: F,
-        response_object: G,
         prompt: &str,
     ) -> Result<String, LlmError>
     where
         F: JsonSchema + GetToolInfo + Serialize,
         G: JsonSchema + Serialize,
     {
-        let tool = self.build_tool(tool_call_object, response_object)?;
+        let tool = self.build_tool::<F, G>()?;
 
         let request = self
             .client
@@ -409,10 +407,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_spells(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(
             discord_user_id,
-            SpellsWithDiscordId::default(),
-            Magic::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的法术相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -424,10 +420,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_abilities(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
             discord_user_id,
-            AbilitiesWithDiscordId::default(),
-            AbilitiesBlock::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的能力相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -439,10 +433,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_skills(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(
             discord_user_id,
-            SkillsWithDiscordId::default(),
-            Skills::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的技能相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -454,10 +446,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_traits(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(
             discord_user_id,
-            TraitsWithDiscordId::default(),
-            Traits::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的特性相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -469,10 +459,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_notes(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<NotesWithDiscordId, Notes>(
             discord_user_id,
-            NotesWithDiscordId::default(),
-            Notes::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的笔记相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -484,10 +472,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<Meta, Meta>(
             discord_user_id,
-            Meta::default(),
-            Meta::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色元数据相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -499,10 +485,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_identity(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
             discord_user_id,
-            IdentityWithDiscordId::default(),
-            Identity::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的身份相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -517,10 +501,8 @@ impl LLM for Gemini {
         &mut self,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
             discord_user_id,
-            ProgressionWithDiscordId::default(),
-            Progression::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的进度相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -532,10 +514,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_combat(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<CombatWithDiscordId, Combat>(
             discord_user_id,
-            CombatWithDiscordId::default(),
-            Combat::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的战斗相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
@@ -547,10 +527,8 @@ impl LLM for Gemini {
     }
 
     async fn add_character_inventory(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool(
+        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
             discord_user_id,
-            InventoryWithDiscordId::default(),
-            Inventory::default(),
             "你是一个龙与地下城2024版本的DM助手，\
             你需要用中文引导用户提供的资料录入该角色的物品栏相关信息，\
             玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
