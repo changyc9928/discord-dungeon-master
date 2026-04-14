@@ -12,27 +12,30 @@ use gemini_rust::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serenity::all::{ChannelId, Context};
 use tracing::{debug, info, warn};
 
 use crate::{
     character::entity::{
-        abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
-        magic::Magic, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
-        traits::Traits,
+        CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
+        inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
+        skills::Skills, traits::Traits,
     },
     llm::{LLM, error::LlmError},
     tool::{
         service::ToolService,
         types::{
-            AbilitiesWithDiscordId, CombatWithDiscordId, GetToolInfo, IdentityWithDiscordId,
+            AbilitiesWithDiscordId, AddItemRequest, AddSpellRequest, CombatWithDiscordId,
+            GetCharacterByNameRequest, GetCharacterRequest, GetToolInfo, IdentityWithDiscordId,
             InventoryWithDiscordId, NotesWithDiscordId, ProgressionWithDiscordId,
-            SkillsWithDiscordId, SpellsWithDiscordId, TraitsWithDiscordId,
+            RemoveItemRequest, SkillsWithDiscordId, SpellsWithDiscordId, TraitsWithDiscordId,
+            UpdateCharacterLevelRequest, UpdateCurrentHpRequest, UpdateMaxHpRequest,
+            UpdateSpellSlotsRequest,
         },
     },
 };
 
-const MAIN_PROMPT: &str = include_str!("./../../prompts/main.txt");
-const MAIN_FOLLOWUP_PROMPT: &str = include_str!("./../../prompts/main_followup.txt");
+const FOLDER_PATH: &str = "/app/prompts";
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct RemoveCacheRequest {
@@ -60,24 +63,24 @@ impl InternalTool {
 
 pub struct Gemini {
     client: gemini_rust::Gemini,
-    dm_discord_id: String,
     tool_service: Arc<ToolService>,
     cached_context: HashMap<String, GenerateContentRequest>,
+    channel_id: u64,
 }
 
 impl Gemini {
     pub fn new(
         model: &str,
         tool_service: Arc<ToolService>,
-        dm_discord_id: String,
+        channel_id: u64,
     ) -> Result<Self, LlmError> {
         let api_key = env::var("GEMINI_API_KEY")?;
         let client = gemini_rust::Gemini::with_model(api_key, model.to_owned())?;
         Ok(Self {
             client,
-            dm_discord_id,
             tool_service,
             cached_context: HashMap::new(),
+            channel_id,
         })
     }
 
@@ -134,67 +137,6 @@ impl Gemini {
         .with_response::<RemoveCacheResponse>();
 
         Ok(Tool::with_functions(vec![tool_call, clear_cache]))
-    }
-
-    async fn run_with_tools(
-        &self,
-        contents: &str,
-        followup_builder: impl Fn(&str, &str, &serde_json::Value) -> String,
-    ) -> Result<String, LlmError> {
-        let text = self.call_llm(contents).await?;
-
-        let Some((name, args, context)) = self.parse_tool_call(&text)? else {
-            return Ok(text);
-        };
-
-        let tool_result = self.tool_service.dispatch(args).await?;
-
-        let followup_prompt =
-            followup_builder(&name, &serde_json::to_string(&tool_result)?, &context);
-
-        self.call_llm(&followup_prompt).await
-    }
-
-    async fn call_llm(&self, contents: &str) -> Result<String, LlmError> {
-        let response = self
-            .client
-            .generate_content()
-            .with_user_message(contents)
-            .execute()
-            .await?;
-
-        Ok(response.text())
-    }
-
-    fn parse_tool_call(
-        &self,
-        text: &str,
-    ) -> Result<Option<(String, serde_json::Value, serde_json::Value)>, LlmError> {
-        debug!("Parsing tool call from text: {}", text);
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(text) else {
-            return Ok(None);
-        };
-
-        let Some(tool_call) = json.get("tool_call") else {
-            return Ok(None);
-        };
-
-        let name = tool_call
-            .get("name")
-            .and_then(|n| n.as_str())
-            .ok_or_else(|| LlmError::InvalidResponse("Missing tool name".into()))?;
-
-        let args = tool_call
-            .get("arguments")
-            .cloned()
-            .ok_or_else(|| LlmError::InvalidResponse("Missing arguments".into()))?;
-
-        let context = tool_call
-            .get("context")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-
-        Ok(Some((name.to_string(), args, context)))
     }
 
     fn merge_request(
@@ -271,6 +213,7 @@ impl Gemini {
     /// Helper method to add a character with a specific tool
     async fn add_character_with_tool<F, G>(
         &mut self,
+        ctx: &Context,
         discord_user_id: &str,
         prompt: &str,
     ) -> Result<String, LlmError>
@@ -292,6 +235,7 @@ impl Gemini {
         self.merge_request(request, discord_user_id)?;
 
         self.conversation_continue(
+            ctx,
             discord_user_id,
             &format!(
                 "我的Discord ID是{}，你好，请问你需要什么信息？",
@@ -306,9 +250,11 @@ impl Gemini {
 impl LLM for Gemini {
     async fn conversation_continue(
         &mut self,
+        ctx: &Context,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
+        let mut remove_cache_flag = None;
         info!(discord_user_id = %discord_user_id, "Starting conversation_continue");
 
         let builder = self
@@ -345,7 +291,21 @@ impl LLM for Gemini {
             self.merge_request(new_cache.build(), discord_user_id)?;
 
             if function_queue.is_empty() {
+                if let Some(id) = remove_cache_flag {
+                    self.cached_context.remove(&id);
+                }
                 return Ok(response.text());
+            }
+
+            let response_text = response.text();
+            if !response_text.is_empty() {
+                let channel_id = ChannelId::new(self.channel_id);
+                let response = channel_id.say(ctx, response_text).await;
+                if let Err(e) = response {
+                    let response = self.client.generate_content();
+                    let response = response.with_user_message(e.to_string());
+                    self.merge_request(response.build(), discord_user_id)?;
+                }
             }
 
             let mut function_response = self.client.generate_content();
@@ -367,7 +327,7 @@ impl LLM for Gemini {
                     debug!(discord_user_id = %discord_user_id, "Handling remove_cache");
                     let args: RemoveCacheRequest =
                         serde_json::from_value(function_call.args.clone())?;
-                    self.cached_context.remove(&args.discord_id);
+                    remove_cache_flag = Some(args.discord_id);
                     serde_json::to_value(RemoveCacheResponse {
                         cache_removed: true,
                         discord_id: discord_user_id.to_owned(),
@@ -406,88 +366,166 @@ impl LLM for Gemini {
         }
     }
 
-    async fn add_character_spells(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_spells.txt")?;
-        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(discord_user_id, &prompt)
+    async fn add_character_spells(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_spells.txt"))?;
+        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_abilities(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_abilities.txt")?;
+    async fn add_character_abilities(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_abilities.txt"))?;
         self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
+            ctx,
             discord_user_id,
             &prompt,
         )
         .await
     }
 
-    async fn add_character_skills(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_skills.txt")?;
-        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(discord_user_id, &prompt)
+    async fn add_character_skills(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_skills.txt"))?;
+        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_traits(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_traits.txt")?;
-        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(discord_user_id, &prompt)
+    async fn add_character_traits(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_traits.txt"))?;
+        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_notes(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_notes.txt")?;
-        self.add_character_with_tool::<NotesWithDiscordId, Notes>(discord_user_id, &prompt)
+    async fn add_character_notes(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_notes.txt"))?;
+        self.add_character_with_tool::<NotesWithDiscordId, Notes>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_meta.txt")?;
-        self.add_character_with_tool::<Meta, Meta>(discord_user_id, &prompt)
+    async fn add_character_meta(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_meta.txt"))?;
+        self.add_character_with_tool::<Meta, Meta>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_identity(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_identity.txt")?;
-        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(discord_user_id, &prompt)
-            .await
+    async fn add_character_identity(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_identity.txt"))?;
+        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
+            ctx,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_progression(
         &mut self,
+        ctx: &Context,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_progression.txt")?;
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_progression.txt"))?;
         self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
+            ctx,
             discord_user_id,
             &prompt,
         )
         .await
     }
 
-    async fn add_character_combat(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_combat.txt")?;
-        self.add_character_with_tool::<CombatWithDiscordId, Combat>(discord_user_id, &prompt)
+    async fn add_character_combat(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_combat.txt"))?;
+        self.add_character_with_tool::<CombatWithDiscordId, Combat>(ctx, discord_user_id, &prompt)
             .await
     }
 
-    async fn add_character_inventory(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string("./prompts/add_character_inventory.txt")?;
-        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(discord_user_id, &prompt)
-            .await
+    async fn add_character_inventory(
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
+    ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_inventory.txt"))?;
+        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
+            ctx,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn request_to_llm(
-        &self,
-        _discord_user_id: &str,
+        &mut self,
+        ctx: &Context,
+        discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        self.run_with_tools(discord_channel_message, |name, result, context| {
-            MAIN_FOLLOWUP_PROMPT
-                .to_string()
-                .replace("{discord_channel_message}", discord_channel_message)
-                .replace("{tool_name}", name)
-                .replace("{tool_result}", result)
-                .replace("{context}", &context.to_string())
-        })
-        .await
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/main.txt"))?;
+
+        let tool = vec![
+            self.build_tool::<GetCharacterRequest, CharacterSheet>()?,
+            self.build_tool::<GetCharacterByNameRequest, CharacterSheet>()?,
+            self.build_tool::<AddItemRequest, CharacterSheet>()?,
+            self.build_tool::<RemoveItemRequest, CharacterSheet>()?,
+            self.build_tool::<AddSpellRequest, CharacterSheet>()?,
+            self.build_tool::<UpdateSpellSlotsRequest, CharacterSheet>()?,
+            self.build_tool::<UpdateCurrentHpRequest, CharacterSheet>()?,
+            self.build_tool::<UpdateMaxHpRequest, CharacterSheet>()?,
+            self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
+            self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
+        ];
+
+        let clear_cache = FunctionDeclaration::new(
+            InternalTool::RemoveCache.name(),
+            "对话结束后你能使用这个工具来移除上下文的缓存",
+            None,
+        )
+        .with_parameters::<RemoveCacheRequest>()
+        .with_response::<RemoveCacheResponse>();
+
+        let mut request = self.client.generate_content();
+
+        for tool in tool {
+            request = request.with_tool(tool);
+        }
+
+        request = request.with_tool(Tool::with_functions(vec![clear_cache]));
+
+        let request = request.with_system_instruction(prompt).build();
+
+        debug!("Request: {:#?}", request);
+
+        self.merge_request(request, discord_user_id)?;
+
+        self.conversation_continue(ctx, discord_user_id, discord_channel_message)
+            .await
     }
 }

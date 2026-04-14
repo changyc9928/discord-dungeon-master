@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
         &service_config.config.gemini_model,
         tool_service,
-        service_config.config.dm_id.clone(),
+        service_config.config.channel_id.parse().unwrap(),
     )?));
 
     let discord_token = service_config

@@ -15,6 +15,7 @@ services:
     volumes:
       - ./config/config.yaml:/app/config.yaml
       - ./migrations:/app/db/migrations
+      - ./prompts:/app/prompts
     environment:
       - DATABASE__HOST=db
       - DATABASE__PORT=5432

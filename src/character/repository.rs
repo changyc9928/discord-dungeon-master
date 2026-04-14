@@ -137,8 +137,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(&identity)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(identity)
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -169,8 +178,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(&progression)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(progression)
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -201,8 +219,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(&combat)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(combat)
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -233,8 +260,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(inventory)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(inventory)
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -265,8 +301,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(spells)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(spells)
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -297,8 +342,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(abilities)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(abilities)
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -329,8 +383,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(skills)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(skills)
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -361,8 +424,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(traits)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(traits)
+        .bind(Notes::default())
         .fetch_one(&self.pool)
         .await?)
     }
@@ -393,8 +465,17 @@ impl CharacterSheetRepository {
         RETURNING *
         "#,
         )
-        .bind(notes)
         .bind(discord_id)
+        .bind(Meta::default())
+        .bind(Identity::default())
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(notes)
         .fetch_one(&self.pool)
         .await?)
     }

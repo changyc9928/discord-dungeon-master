@@ -73,8 +73,12 @@ async fn event_handler(
         let response = llm
             .lock()
             .await
-            .conversation_continue(&author_id, &new_message.content)
-            .await?;
+            .conversation_continue(ctx, &author_id, &new_message.content)
+            .await;
+        let response = match response {
+            Ok(r) => r,
+            Err(e) => e.to_string(),
+        };
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(e) = channel_id.say(ctx, &response).await {
             tracing::error!("Failed to send message: {}", e);
@@ -208,7 +212,7 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
         .llm
         .lock()
         .await
-        .request_to_llm(primary_author, &compiled_content)
+        .request_to_llm(ctx, primary_author, &compiled_content)
         .await
     {
         Ok(response) => {
