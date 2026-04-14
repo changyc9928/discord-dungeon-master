@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
-    env,
+    env, fs,
     sync::Arc,
 };
 
@@ -407,136 +407,72 @@ impl LLM for Gemini {
     }
 
     async fn add_character_spells(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的法术相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色法术以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些法术信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_spells.txt")?;
+        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_abilities(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string("./prompts/add_character_abilities.txt")?;
         self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
             discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的能力相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色能力以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些能力信息并移除对话上下文的缓存",
+            &prompt,
         )
         .await
     }
 
     async fn add_character_skills(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的技能相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色技能以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些技能信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_skills.txt")?;
+        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_traits(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的特性相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色特性以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些特性信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_traits.txt")?;
+        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_notes(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<NotesWithDiscordId, Notes>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的笔记相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色笔记以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些笔记信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_notes.txt")?;
+        self.add_character_with_tool::<NotesWithDiscordId, Notes>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_meta(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<Meta, Meta>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色元数据相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色元数据以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些笔记信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_meta.txt")?;
+        self.add_character_with_tool::<Meta, Meta>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_identity(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的身份相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色身份信息以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些身份信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_identity.txt")?;
+        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_progression(
         &mut self,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let prompt = fs::read_to_string("./prompts/add_character_progression.txt")?;
         self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
             discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的进度相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色进度以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些进度信息并移除对话上下文的缓存",
+            &prompt,
         )
         .await
     }
 
     async fn add_character_combat(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<CombatWithDiscordId, Combat>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的战斗相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色战斗以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些战斗信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_combat.txt")?;
+        self.add_character_with_tool::<CombatWithDiscordId, Combat>(discord_user_id, &prompt)
+            .await
     }
 
     async fn add_character_inventory(&mut self, discord_user_id: &str) -> Result<String, LlmError> {
-        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
-            discord_user_id,
-            "你是一个龙与地下城2024版本的DM助手，\
-            你需要用中文引导用户提供的资料录入该角色的物品栏相关信息，\
-            玩家向你发出第一次问候之后你必须向玩家提出你的缺失的信息以 \
-            完成全部相关信息的录入，不要询问或关心任何超过角色物品以外的任何事物， \
-            你将使用输入给你的discordId来使用工具，\
-            录入成功后请总结更新了角色的哪些物品栏信息并移除对话上下文的缓存",
-        )
-        .await
+        let prompt = fs::read_to_string("./prompts/add_character_inventory.txt")?;
+        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(discord_user_id, &prompt)
+            .await
     }
 
     async fn request_to_llm(

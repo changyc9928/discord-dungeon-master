@@ -3,6 +3,8 @@ use crate::character;
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
     #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
     VarError(#[from] std::env::VarError),
     #[error(transparent)]
     CacheError(#[from] gemini_rust::cache::Error),
