@@ -22,15 +22,16 @@ use crate::{
         skills::Skills, traits::Traits,
     },
     llm::{LLM, error::LlmError},
+    story::service::StoryService,
     tool::{
         service::ToolService,
         types::{
             AbilitiesWithDiscordId, AddItemRequest, AddSpellRequest, CombatWithDiscordId,
             GetCharacterByNameRequest, GetCharacterRequest, GetToolInfo, IdentityWithDiscordId,
-            InventoryWithDiscordId, NotesWithDiscordId, ProgressionWithDiscordId,
-            RemoveItemRequest, SkillsWithDiscordId, SpellsWithDiscordId, TraitsWithDiscordId,
-            UpdateCharacterLevelRequest, UpdateCurrentHpRequest, UpdateMaxHpRequest,
-            UpdateSpellSlotsRequest,
+            InventoryWithDiscordId, NewDialogueRequest, NotesWithDiscordId,
+            ProgressionWithDiscordId, RemoveItemRequest, SkillsWithDiscordId, SpellsWithDiscordId,
+            TraitsWithDiscordId, UpdateCharacterLevelRequest, UpdateCurrentHpRequest,
+            UpdateMaxHpRequest, UpdateSpellSlotsRequest,
         },
     },
 };
@@ -64,6 +65,7 @@ impl InternalTool {
 pub struct Gemini {
     client: gemini_rust::Gemini,
     tool_service: Arc<ToolService>,
+    story_service: Arc<StoryService>,
     cached_context: HashMap<String, GenerateContentRequest>,
     channel_id: u64,
 }
@@ -72,6 +74,7 @@ impl Gemini {
     pub fn new(
         model: &str,
         tool_service: Arc<ToolService>,
+        story_service: Arc<StoryService>,
         channel_id: u64,
     ) -> Result<Self, LlmError> {
         let api_key = env::var("GEMINI_API_KEY")?;
@@ -79,6 +82,7 @@ impl Gemini {
         Ok(Self {
             client,
             tool_service,
+            story_service,
             cached_context: HashMap::new(),
             channel_id,
         })
@@ -490,6 +494,41 @@ impl LLM for Gemini {
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{FOLDER_PATH}/main.txt"))?;
 
+        let summary = self.story_service.get_latest_story().await?;
+        let dialogues = self.story_service.get_latest_dialogues().await?;
+        let dialogues = dialogues
+            .iter()
+            .map(|d| {
+                format!(
+                    "[{}{}]：{}",
+                    d.author_name,
+                    if d.author_character.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("（{}）", d.author_character)
+                    },
+                    d.dialogue
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let prompt = format!(
+            "{}
+
+【背景信息-剧情总结（用于理解当前局势）】
+{summary}
+
+【背景信息-最近对话（按时间顺序）】
+{dialogues}
+
+【说明】
+- 上述内容仅作为背景信息
+- 请基于这些信息进行判断
+- 不要重复或总结上述内容",
+            prompt
+        );
+
         let tool = vec![
             self.build_tool::<GetCharacterRequest, CharacterSheet>()?,
             self.build_tool::<GetCharacterByNameRequest, CharacterSheet>()?,
@@ -527,5 +566,93 @@ impl LLM for Gemini {
 
         self.conversation_continue(ctx, discord_user_id, discord_channel_message)
             .await
+    }
+
+    async fn store_new_dialogue(
+        &mut self,
+        ctx: &Context,
+        message: &str,
+        author_id: &str,
+        author_name: &str,
+    ) -> Result<(), LlmError> {
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/new_dialogue.txt"))?;
+
+        let tool = self.build_tool::<NewDialogueRequest, ()>()?;
+
+        let request = self
+            .client
+            .generate_content()
+            .with_system_instruction(prompt)
+            .with_tool(tool)
+            .build();
+
+        self.merge_request(request, author_id)?;
+
+        self.conversation_continue(
+            ctx,
+            author_id,
+            &format!("{} {}: {}", author_id, author_name, message),
+        )
+        .await?;
+
+        self.cached_context.remove(author_id);
+
+        Ok(())
+    }
+
+    async fn new_summary(&mut self, ctx: &Context) -> Result<(), LlmError> {
+        let dialogues = self.story_service.get_latest_dialogues().await?;
+        if dialogues.len() < 10 {
+            return Ok(());
+        }
+        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/new_summary.txt"))?;
+
+        let request = self
+            .client
+            .generate_content()
+            .with_system_instruction(prompt)
+            .build();
+
+        self.merge_request(request, "system")?;
+
+        let story = self.story_service.get_latest_story().await?;
+
+        let dialogues = dialogues
+            .iter()
+            .map(|d| {
+                format!(
+                    "[{}{}]：{}",
+                    d.author_name,
+                    if d.author_character.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("（{}）", d.author_character)
+                    },
+                    d.dialogue
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let message = format!(
+            "【历史剧情总结】
+{story}
+
+【最近对话记录（按时间顺序）】
+{dialogues}
+
+【任务】
+请基于以上信息，生成一段更新后的完整剧情总结。"
+        );
+
+        let res = self.conversation_continue(ctx, "system", &message).await?;
+
+        self.story_service.insert_new_story(&res).await?;
+
+        self.story_service.clear_dialogue_table().await?;
+
+        self.cached_context.remove("system");
+
+        Ok(())
     }
 }

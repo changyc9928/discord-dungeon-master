@@ -15,6 +15,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 pub struct BufferedMessage {
     pub content: String,
     pub author_id: String,
+    pub author_name: String,
     pub start_time: DateTime<chrono::Utc>,
 }
 
@@ -47,6 +48,7 @@ async fn event_handler(
 
     let author_id = new_message.author.id.to_string();
     let channel_id = new_message.channel_id.to_string();
+    let author_name = new_message.author.name.to_string();
 
     // Ignore messages outside target channel or from self
     if channel_id != data.channel_id || author_id == data.self_discord_id {
@@ -56,19 +58,11 @@ async fn event_handler(
     let buffered_message = BufferedMessage {
         content: new_message.content.clone(),
         author_id: author_id.clone(),
+        author_name: author_name.clone(),
         start_time: chrono::Utc::now(),
     };
 
-    if author_id == data.dm_discord_id {
-        {
-            let mut messages = data.buffered_messages.lock().await;
-            messages.push(buffered_message);
-        }
-
-        if should_flush_buffer(data).await? {
-            flush_buffer(ctx, data).await;
-        }
-    } else if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) {
+    if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) {
         let llm = &data.llm;
         let response = llm
             .lock()
@@ -82,6 +76,15 @@ async fn event_handler(
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(e) = channel_id.say(ctx, &response).await {
             tracing::error!("Failed to send message: {}", e);
+        }
+    } else {
+        {
+            let mut messages = data.buffered_messages.lock().await;
+            messages.push(buffered_message);
+        }
+
+        if author_id != data.dm_discord_id || should_flush_buffer(data).await? {
+            flush_buffer(ctx, data).await;
         }
     }
 
@@ -207,6 +210,39 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
 
     // Use the most recent message's author for the LLM request
     let primary_author = &messages.last().unwrap().author_id;
+
+    if let Err(e) = data
+        .llm
+        .lock()
+        .await
+        .store_new_dialogue(
+            ctx,
+            &compiled_content,
+            primary_author,
+            &messages.last().unwrap().author_name,
+        )
+        .await
+    {
+        tracing::error!("LLM error: {}", e);
+        let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
+        if let Err(send_err) = channel_id
+            .say(ctx, format!("Error processing buffered messages: {}", e))
+            .await
+        {
+            tracing::error!("Failed to send error message: {}", send_err);
+        }
+    }
+
+    if let Err(e) = data.llm.lock().await.new_summary(ctx).await {
+        tracing::error!("LLM error: {}", e);
+        let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
+        if let Err(send_err) = channel_id
+            .say(ctx, format!("Error processing buffered messages: {}", e))
+            .await
+        {
+            tracing::error!("Failed to send error message: {}", send_err);
+        }
+    }
 
     match data
         .llm

@@ -1,10 +1,13 @@
-use crate::character::error::CharacterSheetError;
+use crate::{character::error::CharacterSheetError, story::error::StoryError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
-    #[error("Character sheet service error: {0}")]
+    #[error(transparent)]
+    StoryServiceError(#[from] StoryError),
+
+    #[error(transparent)]
     CharacterSheetServiceError(#[from] CharacterSheetError),
 
-    #[error("JSON deserialization error: {0}")]
+    #[error(transparent)]
     JsonDeserializationError(#[from] serde_json::Error),
 }

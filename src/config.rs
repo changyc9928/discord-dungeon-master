@@ -152,4 +152,5 @@ pub struct AiDmConfig {
     pub buffered_message_expiry_seconds: u64,
     #[serde(default = "default_buffer_check_interval_seconds")]
     pub buffer_check_interval_seconds: u64,
+    pub compile_trigger: i64,
 }

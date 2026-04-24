@@ -7,6 +7,10 @@ use crate::{
     config::{AiDmConfig, ServiceConfig},
     llm::gemini::Gemini,
     pg_pool::{TestPgPool, TestPgPoolConfig},
+    story::{
+        repository::{DialogueRepository, StoryRepository},
+        service::StoryService,
+    },
     tool::service::ToolService,
 };
 
@@ -16,6 +20,7 @@ pub mod discord_bot;
 pub mod error;
 pub mod llm;
 pub mod pg_pool;
+pub mod story;
 pub mod tool;
 
 #[tokio::main]
@@ -39,17 +44,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     })
     .await;
     let pg_pool = pg_pool.resource().await;
-    let character_sheet_repository = Arc::new(CharacterSheetRepository::from_pool(pg_pool));
+    let character_sheet_repository = Arc::new(CharacterSheetRepository::from_pool(pg_pool.clone()));
+    let story_repository = Arc::new(StoryRepository::from_pool(pg_pool.clone()));
+    let dialogue_repository = Arc::new(DialogueRepository::from_pool(pg_pool));
     let character_sheet_service = Arc::new(CharacterSheetService {
         repo: character_sheet_repository,
     });
+    let story_service = Arc::new(StoryService {
+        repository: story_repository,
+        dialogue_repository,
+        compile_trigger: service_config.config.compile_trigger,
+    });
     let tool_service = Arc::new(ToolService {
         character_sheet_service: Arc::clone(&character_sheet_service),
+        story_service: Arc::clone(&story_service),
     });
 
     let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
         &service_config.config.gemini_model,
         tool_service,
+        story_service,
         service_config.config.channel_id.parse().unwrap(),
     )?));
 

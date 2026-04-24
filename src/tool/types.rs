@@ -77,6 +77,9 @@ pub enum ToolCall {
 
     #[serde(rename = "update_character_level")]
     UpdateCharacterLevel(UpdateCharacterLevelRequest),
+
+    #[serde(rename = "insert_new_dialogue")]
+    NewDialogue(NewDialogueRequest),
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
@@ -206,8 +209,24 @@ pub struct UpdateCharacterLevelRequest {
     pub level: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct NewDialogueRequest {
+    pub discord_id: String,
+    pub message: String,
+    pub author_name: String,
+}
+
 pub trait GetToolInfo {
     fn get_tool_name() -> (String, String);
+}
+
+impl GetToolInfo for NewDialogueRequest {
+    fn get_tool_name() -> (String, String) {
+        (
+            "insert_new_dialogue".to_owned(),
+            "插入新的游戏对话".to_owned(),
+        )
+    }
 }
 
 impl GetToolInfo for UpdateCharacterLevelRequest {

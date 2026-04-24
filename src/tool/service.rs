@@ -2,17 +2,23 @@ use std::sync::Arc;
 
 use crate::{
     character::service::CharacterSheetService,
+    story::service::StoryService,
     tool::{error::ToolError, types::ToolCall},
 };
 
 pub struct ToolService {
     pub character_sheet_service: Arc<CharacterSheetService>,
+    pub story_service: Arc<StoryService>,
 }
 
 impl ToolService {
-    pub fn new(character_sheet_service: Arc<CharacterSheetService>) -> Self {
+    pub fn new(
+        character_sheet_service: Arc<CharacterSheetService>,
+        story_service: Arc<StoryService>,
+    ) -> Self {
         Self {
             character_sheet_service,
+            story_service,
         }
     }
 
@@ -22,6 +28,22 @@ impl ToolService {
     ) -> Result<serde_json::Value, ToolError> {
         let tool: ToolCall = serde_json::from_value(tool_call.clone())?;
         Ok(match tool {
+            ToolCall::NewDialogue(new_dialogue) => {
+                let character = self
+                    .character_sheet_service
+                    .get_character(&new_dialogue.discord_id)
+                    .await?;
+                serde_json::to_value(
+                    self.story_service
+                        .insert_new_dialogue(
+                            &new_dialogue.message,
+                            &new_dialogue.author_name,
+                            &character.identity.character_name,
+                            &new_dialogue.discord_id,
+                        )
+                        .await?,
+                )?
+            }
             ToolCall::AddCharacterMeta(meta) => serde_json::to_value(
                 self.character_sheet_service
                     .add_character_meta(&meta)

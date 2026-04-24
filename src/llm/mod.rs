@@ -81,4 +81,14 @@ pub trait LLM: Send + Sync {
         ctx: &Context,
         discord_user_id: &str,
     ) -> Result<String, LlmError>;
+
+    async fn store_new_dialogue(
+        &mut self,
+        ctx: &Context,
+        message: &str,
+        author_id: &str,
+        author_name: &str,
+    ) -> Result<(), LlmError>;
+
+    async fn new_summary(&mut self, ctx: &Context) -> Result<(), LlmError>;
 }

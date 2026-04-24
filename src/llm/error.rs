@@ -1,4 +1,4 @@
-use crate::character;
+use crate::{character, story::error::StoryError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
@@ -20,4 +20,6 @@ pub enum LlmError {
     ToolError(#[from] crate::tool::error::ToolError),
     #[error("Content not found: {0}")]
     MissingContent(String),
+    #[error(transparent)]
+    StoryError(#[from] StoryError)
 }
