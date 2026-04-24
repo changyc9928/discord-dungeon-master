@@ -23,3 +23,5 @@ self-discord-id: "1480559490481782845"
 buffered-message-expiry-seconds: 5
 
 buffer-check-interval-seconds: 2
+
+compile-trigger: 10
