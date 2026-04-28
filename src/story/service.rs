@@ -14,7 +14,12 @@ pub struct StoryService {
 
 impl StoryService {
     pub async fn get_latest_story(&self) -> Result<String, StoryError> {
-        Ok(self.repository.get_story().await?.summary)
+        Ok(self
+            .repository
+            .get_story()
+            .await?
+            .map(|f| f.summary)
+            .unwrap_or("<目前还没有故事记录>".to_owned()))
     }
 
     pub async fn insert_new_story(&self, story: &str) -> Result<(), StoryError> {

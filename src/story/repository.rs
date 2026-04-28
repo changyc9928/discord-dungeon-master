@@ -14,7 +14,7 @@ impl StoryRepository {
         Self { pool }
     }
 
-    pub async fn get_story(&self) -> Result<StoryEntity, StoryError> {
+    pub async fn get_story(&self) -> Result<Option<StoryEntity>, StoryError> {
         Ok(sqlx::query_as::<_, StoryEntity>(
             r#"
             SELECT
@@ -24,7 +24,7 @@ impl StoryRepository {
             LIMIT 1
             "#,
         )
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?)
     }
 
@@ -94,7 +94,6 @@ impl DialogueRepository {
             SELECT * FROM dialogues
             ORDER BY updated_at DESC
             LIMIT $1
-            RETURNING *
             "#,
         )
         .bind(number_of_dialogues)

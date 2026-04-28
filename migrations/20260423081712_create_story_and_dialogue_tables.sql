@@ -5,7 +5,7 @@ CREATE TABLE story (
     PRIMARY KEY (updated_at)
 );
 
-CREATE TABLE dialogue (
+CREATE TABLE dialogues (
     dialogue TEXT NOT NULL,
     author_name TEXT NOT NULL,
     author_character TEXT NOT NULL,

@@ -3,6 +3,7 @@ use poise::serenity_prelude as serenity;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Duration, interval};
+use tracing::info;
 
 use crate::character::service::CharacterSheetService;
 use crate::discord_bot::{commands, error::DiscordBotError};
@@ -62,7 +63,13 @@ async fn event_handler(
         start_time: chrono::Utc::now(),
     };
 
-    if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) {
+    info!(
+        "Received message from {}: {}",
+        author_name, new_message.content
+    );
+
+    if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) && !new_message.author.bot
+    {
         let llm = &data.llm;
         let response = llm
             .lock()
@@ -83,7 +90,7 @@ async fn event_handler(
             messages.push(buffered_message);
         }
 
-        if author_id != data.dm_discord_id || should_flush_buffer(data).await? {
+        if author_id == data.dm_discord_id && should_flush_buffer(data).await? {
             flush_buffer(ctx, data).await;
         }
     }

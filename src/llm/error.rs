@@ -6,8 +6,8 @@ pub enum LlmError {
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     VarError(#[from] std::env::VarError),
-    #[error(transparent)]
-    CacheError(#[from] gemini_rust::cache::Error),
+    #[error("{0}")]
+    CacheError(String),
     #[error(transparent)]
     GeminiError(#[from] gemini_rust::ClientError),
     #[error(transparent)]
@@ -21,5 +21,5 @@ pub enum LlmError {
     #[error("Content not found: {0}")]
     MissingContent(String),
     #[error(transparent)]
-    StoryError(#[from] StoryError)
+    StoryError(#[from] StoryError),
 }

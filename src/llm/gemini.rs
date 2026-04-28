@@ -2,17 +2,20 @@ use std::{
     collections::{HashMap, VecDeque},
     env, fs,
     sync::Arc,
+    time::Duration,
 };
 
 use async_trait::async_trait;
+use chrono::Utc;
 use gemini_rust::{
     Content, ContentBuilder, FunctionCall, FunctionDeclaration, FunctionResponse,
-    GenerateContentRequest, Part, Role, Tool,
+    GenerateContentRequest, GenerationResponse, Part, Role, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serenity::all::{ChannelId, Context};
+use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -234,7 +237,7 @@ impl Gemini {
             .with_system_instruction(prompt)
             .build();
 
-        debug!("Request: {:#?}", request);
+        debug!("Request: {:?}", request);
 
         self.merge_request(request, discord_user_id)?;
 
@@ -247,6 +250,38 @@ impl Gemini {
             ),
         )
         .await
+    }
+
+    async fn execute_with_retry(
+        &self,
+        request: gemini_rust::generation::builder::ContentBuilder,
+    ) -> Result<GenerationResponse, gemini_rust::client::Error> {
+        let mut attempts = 0;
+        let max_retries = 20;
+
+        loop {
+            match request.clone().execute().await {
+                Ok(res) => return Ok(res),
+
+                Err(e) => {
+                    match &e {
+                        gemini_rust::client::Error::BadResponse { code, .. } if *code == 503 => {
+                            attempts += 1;
+
+                            if attempts > max_retries {
+                                return Err(e);
+                            }
+
+                            // simple backoff (can improve later)
+                            let delay = Duration::from_secs(2_u64.pow(attempts));
+                            sleep(delay).await;
+                        }
+
+                        _ => return Err(e), // propagate all other errors immediately
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -261,6 +296,13 @@ impl LLM for Gemini {
         let mut remove_cache_flag = None;
         info!(discord_user_id = %discord_user_id, "Starting conversation_continue");
 
+        if !self.cached_context.contains_key(discord_user_id) {
+            return Err(LlmError::CacheError(format!(
+                "No cached context for Discord user ID: {}",
+                discord_user_id
+            )));
+        }
+
         let builder = self
             .client
             .generate_content()
@@ -269,15 +311,15 @@ impl LLM for Gemini {
 
         let cached_content = self.merge_request(builder, discord_user_id)?.build();
 
-        debug!("First cache: {:#?}", cached_content);
+        debug!("First cache: {:?}", cached_content);
 
         loop {
             let request = self.client.generate_content().build();
             let request = self.merge_request(request, discord_user_id)?;
 
-            debug!("Full request: {:#?}", request.clone().build());
+            debug!("Full request: {:?}", request.clone().build());
 
-            let response = request.execute().await?;
+            let response = self.execute_with_retry(request).await?;
 
             let contents = response
                 .candidates
@@ -286,7 +328,7 @@ impl LLM for Gemini {
                 .map(|c| c.content)
                 .collect::<Vec<_>>();
 
-            debug!("Responded content: {:#?}", contents);
+            debug!("Responded content: {:?}", contents);
 
             let function_queue = self.extract_function_calls(&contents);
 
@@ -494,9 +536,10 @@ impl LLM for Gemini {
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{FOLDER_PATH}/main.txt"))?;
 
+        let discord_user_id = format!("{}_{}", discord_user_id, Utc::now().timestamp());
         let summary = self.story_service.get_latest_story().await?;
         let dialogues = self.story_service.get_latest_dialogues().await?;
-        let dialogues = dialogues
+        let mut dialogues = dialogues
             .iter()
             .map(|d| {
                 format!(
@@ -512,6 +555,9 @@ impl LLM for Gemini {
             })
             .collect::<Vec<_>>()
             .join("\n");
+        if dialogues.is_empty() {
+            dialogues = "<目前无任何对话记录>".to_string();
+        }
 
         let prompt = format!(
             "{}
@@ -542,13 +588,13 @@ impl LLM for Gemini {
             self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
         ];
 
-        let clear_cache = FunctionDeclaration::new(
-            InternalTool::RemoveCache.name(),
-            "对话结束后你能使用这个工具来移除上下文的缓存",
-            None,
-        )
-        .with_parameters::<RemoveCacheRequest>()
-        .with_response::<RemoveCacheResponse>();
+        // let clear_cache = FunctionDeclaration::new(
+        //     InternalTool::RemoveCache.name(),
+        //     "对话结束后你能使用这个工具来移除上下文的缓存",
+        //     None,
+        // )
+        // .with_parameters::<RemoveCacheRequest>()
+        // .with_response::<RemoveCacheResponse>();
 
         let mut request = self.client.generate_content();
 
@@ -556,16 +602,21 @@ impl LLM for Gemini {
             request = request.with_tool(tool);
         }
 
-        request = request.with_tool(Tool::with_functions(vec![clear_cache]));
+        // request = request.with_tool(Tool::with_functions(vec![clear_cache]));
 
         let request = request.with_system_instruction(prompt).build();
 
-        debug!("Request: {:#?}", request);
+        debug!("Request: {:?}", request);
 
-        self.merge_request(request, discord_user_id)?;
+        self.merge_request(request, &discord_user_id)?;
 
-        self.conversation_continue(ctx, discord_user_id, discord_channel_message)
-            .await
+        let reply = self
+            .conversation_continue(ctx, &discord_user_id, discord_channel_message)
+            .await?;
+
+        self.cached_context.remove(&discord_user_id);
+
+        Ok(reply)
     }
 
     async fn store_new_dialogue(
@@ -577,6 +628,8 @@ impl LLM for Gemini {
     ) -> Result<(), LlmError> {
         let prompt = fs::read_to_string(format!("{FOLDER_PATH}/new_dialogue.txt"))?;
 
+        let author_id = format!("{}_{}", author_id, Utc::now().timestamp());
+
         let tool = self.build_tool::<NewDialogueRequest, ()>()?;
 
         let request = self
@@ -586,21 +639,22 @@ impl LLM for Gemini {
             .with_tool(tool)
             .build();
 
-        self.merge_request(request, author_id)?;
+        self.merge_request(request, &author_id)?;
 
         self.conversation_continue(
             ctx,
-            author_id,
+            &author_id,
             &format!("{} {}: {}", author_id, author_name, message),
         )
         .await?;
 
-        self.cached_context.remove(author_id);
+        self.cached_context.remove(&author_id);
 
         Ok(())
     }
 
     async fn new_summary(&mut self, ctx: &Context) -> Result<(), LlmError> {
+        let user_id = format!("summary_{}", Utc::now().timestamp());
         let dialogues = self.story_service.get_latest_dialogues().await?;
         if dialogues.len() < 10 {
             return Ok(());
@@ -613,7 +667,7 @@ impl LLM for Gemini {
             .with_system_instruction(prompt)
             .build();
 
-        self.merge_request(request, "system")?;
+        self.merge_request(request, &user_id)?;
 
         let story = self.story_service.get_latest_story().await?;
 
@@ -645,13 +699,13 @@ impl LLM for Gemini {
 请基于以上信息，生成一段更新后的完整剧情总结。"
         );
 
-        let res = self.conversation_continue(ctx, "system", &message).await?;
+        let res = self.conversation_continue(ctx, &user_id, &message).await?;
 
         self.story_service.insert_new_story(&res).await?;
 
         self.story_service.clear_dialogue_table().await?;
 
-        self.cached_context.remove("system");
+        self.cached_context.remove(&user_id);
 
         Ok(())
     }
