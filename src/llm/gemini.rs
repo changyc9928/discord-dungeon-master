@@ -408,7 +408,15 @@ impl LLM for Gemini {
 
                     let character = self
                         .character_sheet_service
-                        .get_character(discord_user_id)
+                        .get_character(
+                            discord_user_id
+                                .split("_")
+                                .collect::<Vec<_>>()
+                                .first()
+                                .ok_or_else(|| {
+                                    LlmError::MissingContent("discord_user_id".to_string())
+                                })?,
+                        )
                         .await;
                     let character_name = match character {
                         Ok(character) => character.identity.character_name,
