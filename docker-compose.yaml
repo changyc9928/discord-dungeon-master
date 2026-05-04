@@ -21,7 +21,7 @@ services:
       - DATABASE__PORT=5432
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - RUST_LOG=none,discord_dungeon_master=debug
+      - RUST_LOG=none,discord_dungeon_master=debug,sqlx=debug
     ports:
       - 30000:30000
   db:

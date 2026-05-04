@@ -14,7 +14,6 @@ use gemini_rust::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use serenity::all::{ChannelId, Context};
 use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
@@ -24,6 +23,7 @@ use crate::{
         inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
         skills::Skills, traits::Traits,
     },
+    discord_bot::MessageSender,
     llm::{LLM, error::LlmError},
     story::service::StoryService,
     tool::{
@@ -38,8 +38,6 @@ use crate::{
         },
     },
 };
-
-const FOLDER_PATH: &str = "/app/prompts";
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 struct RemoveCacheRequest {
@@ -70,7 +68,9 @@ pub struct Gemini {
     tool_service: Arc<ToolService>,
     story_service: Arc<StoryService>,
     cached_context: HashMap<String, GenerateContentRequest>,
-    channel_id: u64,
+    dm_discord_id: String,
+    folder_path: String,
+    compile_trigger: i64,
 }
 
 impl Gemini {
@@ -78,7 +78,9 @@ impl Gemini {
         model: &str,
         tool_service: Arc<ToolService>,
         story_service: Arc<StoryService>,
-        channel_id: u64,
+        dm_discord_id: String,
+        folder_path: String,
+        compile_trigger: i64,
     ) -> Result<Self, LlmError> {
         let api_key = env::var("GEMINI_API_KEY")?;
         let client = gemini_rust::Gemini::with_model(api_key, model.to_owned())?;
@@ -87,7 +89,9 @@ impl Gemini {
             tool_service,
             story_service,
             cached_context: HashMap::new(),
-            channel_id,
+            dm_discord_id,
+            folder_path,
+            compile_trigger,
         })
     }
 
@@ -135,15 +139,15 @@ impl Gemini {
             .with_parameters::<F>()
             .with_response::<G>();
 
-        let clear_cache = FunctionDeclaration::new(
-            InternalTool::RemoveCache.name(),
-            "对话结束后你能使用这个工具来移除上下文的缓存",
-            None,
-        )
-        .with_parameters::<RemoveCacheRequest>()
-        .with_response::<RemoveCacheResponse>();
+        // let clear_cache = FunctionDeclaration::new(
+        //     InternalTool::RemoveCache.name(),
+        //     "对话结束后你能使用这个工具来移除上下文的缓存",
+        //     None,
+        // )
+        // .with_parameters::<RemoveCacheRequest>()
+        // .with_response::<RemoveCacheResponse>();
 
-        Ok(Tool::with_functions(vec![tool_call, clear_cache]))
+        Ok(Tool::with_functions(vec![tool_call]))
     }
 
     fn merge_request(
@@ -220,7 +224,7 @@ impl Gemini {
     /// Helper method to add a character with a specific tool
     async fn add_character_with_tool<F, G>(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
         prompt: &str,
     ) -> Result<String, LlmError>
@@ -230,10 +234,19 @@ impl Gemini {
     {
         let tool = self.build_tool::<F, G>()?;
 
+        let clear_cache = FunctionDeclaration::new(
+            InternalTool::RemoveCache.name(),
+            "对话结束后你能使用这个工具来移除上下文的缓存",
+            None,
+        )
+        .with_parameters::<RemoveCacheRequest>()
+        .with_response::<RemoveCacheResponse>();
+
         let request = self
             .client
             .generate_content()
             .with_tool(tool.clone())
+            .with_tool(Tool::with_functions(vec![clear_cache]))
             .with_system_instruction(prompt)
             .build();
 
@@ -289,7 +302,7 @@ impl Gemini {
 impl LLM for Gemini {
     async fn conversation_continue(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
@@ -345,8 +358,9 @@ impl LLM for Gemini {
 
             let response_text = response.text();
             if !response_text.is_empty() {
-                let channel_id = ChannelId::new(self.channel_id);
-                let response = channel_id.say(ctx, response_text).await;
+                // let channel_id = ChannelId::new(self.channel_id.parse()?);
+                // let response = channel_id.say(ctx, response_text).await;
+                let response = ctx.send(response_text).await;
                 if let Err(e) = response {
                     let response = self.client.generate_content();
                     let response = response.with_user_message(e.to_string());
@@ -392,10 +406,18 @@ impl LLM for Gemini {
 
                     match response {
                         Ok(r) => r,
-                        Err(e) => serde_json::to_value(json!({
-                            "result": "Error calling tool",
-                            "error": e.to_string()
-                        }))?,
+                        Err(e) => {
+                            tracing::error!(
+                                discord_user_id = %discord_user_id,
+                                tool_name = %function_call.name,
+                                error = %e,
+                                "Error executing tool"
+                            );
+                            serde_json::to_value(json!({
+                                "result": "Error calling tool",
+                                "error": e.to_string()
+                            }))?
+                        }
                     }
                 };
 
@@ -414,20 +436,21 @@ impl LLM for Gemini {
 
     async fn add_character_spells(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_spells.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_spells.txt", self.folder_path))?;
         self.add_character_with_tool::<SpellsWithDiscordId, Magic>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_abilities(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_abilities.txt"))?;
+        let prompt =
+            fs::read_to_string(format!("{}/add_character_abilities.txt", self.folder_path))?;
         self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
             ctx,
             discord_user_id,
@@ -438,50 +461,51 @@ impl LLM for Gemini {
 
     async fn add_character_skills(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_skills.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_skills.txt", self.folder_path))?;
         self.add_character_with_tool::<SkillsWithDiscordId, Skills>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_traits(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_traits.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_traits.txt", self.folder_path))?;
         self.add_character_with_tool::<TraitsWithDiscordId, Traits>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_notes(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_notes.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_notes.txt", self.folder_path))?;
         self.add_character_with_tool::<NotesWithDiscordId, Notes>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_meta(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_meta.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_meta.txt", self.folder_path))?;
         self.add_character_with_tool::<Meta, Meta>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_identity(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_identity.txt"))?;
+        let prompt =
+            fs::read_to_string(format!("{}/add_character_identity.txt", self.folder_path))?;
         self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
             ctx,
             discord_user_id,
@@ -492,10 +516,13 @@ impl LLM for Gemini {
 
     async fn add_character_progression(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_progression.txt"))?;
+        let prompt = fs::read_to_string(format!(
+            "{}/add_character_progression.txt",
+            self.folder_path
+        ))?;
         self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
             ctx,
             discord_user_id,
@@ -506,20 +533,21 @@ impl LLM for Gemini {
 
     async fn add_character_combat(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_combat.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/add_character_combat.txt", self.folder_path))?;
         self.add_character_with_tool::<CombatWithDiscordId, Combat>(ctx, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_inventory(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/add_character_inventory.txt"))?;
+        let prompt =
+            fs::read_to_string(format!("{}/add_character_inventory.txt", self.folder_path))?;
         self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
             ctx,
             discord_user_id,
@@ -530,11 +558,16 @@ impl LLM for Gemini {
 
     async fn request_to_llm(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/main.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/main.txt", self.folder_path))?;
+
+        let message = format!(
+            "Discord channnel里的用户{}发送了消息：{}",
+            discord_user_id, discord_channel_message
+        );
 
         let discord_user_id = format!("{}_{}", discord_user_id, Utc::now().timestamp());
         let summary = self.story_service.get_latest_story().await?;
@@ -562,6 +595,8 @@ impl LLM for Gemini {
         let prompt = format!(
             "{}
 
+DM的discord ID为{}
+
 【背景信息-剧情总结（用于理解当前局势）】
 {summary}
 
@@ -572,7 +607,7 @@ impl LLM for Gemini {
 - 上述内容仅作为背景信息
 - 请基于这些信息进行判断
 - 不要重复或总结上述内容",
-            prompt
+            prompt, self.dm_discord_id
         );
 
         let tool = vec![
@@ -584,7 +619,6 @@ impl LLM for Gemini {
             self.build_tool::<UpdateSpellSlotsRequest, CharacterSheet>()?,
             self.build_tool::<UpdateCurrentHpRequest, CharacterSheet>()?,
             self.build_tool::<UpdateMaxHpRequest, CharacterSheet>()?,
-            self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
             self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
         ];
 
@@ -611,7 +645,7 @@ impl LLM for Gemini {
         self.merge_request(request, &discord_user_id)?;
 
         let reply = self
-            .conversation_continue(ctx, &discord_user_id, discord_channel_message)
+            .conversation_continue(ctx, &discord_user_id, &message)
             .await?;
 
         self.cached_context.remove(&discord_user_id);
@@ -621,14 +655,21 @@ impl LLM for Gemini {
 
     async fn store_new_dialogue(
         &mut self,
-        ctx: &Context,
+        ctx: &dyn MessageSender,
         message: &str,
         author_id: &str,
         author_name: &str,
     ) -> Result<(), LlmError> {
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/new_dialogue.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/new_dialogue.txt", self.folder_path))?;
 
-        let author_id = format!("{}_{}", author_id, Utc::now().timestamp());
+        let prompt = format!(
+            "{prompt}
+
+DM的discord ID为{}",
+            self.dm_discord_id
+        );
+
+        let author_id_with_timestamp = format!("{}_{}", author_id, Utc::now().timestamp());
 
         let tool = self.build_tool::<NewDialogueRequest, ()>()?;
 
@@ -639,27 +680,27 @@ impl LLM for Gemini {
             .with_tool(tool)
             .build();
 
-        self.merge_request(request, &author_id)?;
+        self.merge_request(request, &author_id_with_timestamp)?;
 
         self.conversation_continue(
             ctx,
-            &author_id,
+            &author_id_with_timestamp,
             &format!("{} {}: {}", author_id, author_name, message),
         )
         .await?;
 
-        self.cached_context.remove(&author_id);
+        self.cached_context.remove(&author_id_with_timestamp);
 
         Ok(())
     }
 
-    async fn new_summary(&mut self, ctx: &Context) -> Result<(), LlmError> {
+    async fn new_summary(&mut self, ctx: &dyn MessageSender) -> Result<(), LlmError> {
         let user_id = format!("summary_{}", Utc::now().timestamp());
         let dialogues = self.story_service.get_latest_dialogues().await?;
-        if dialogues.len() < 10 {
+        if dialogues.len() < self.compile_trigger as usize {
             return Ok(());
         }
-        let prompt = fs::read_to_string(format!("{FOLDER_PATH}/new_summary.txt"))?;
+        let prompt = fs::read_to_string(format!("{}/new_summary.txt", self.folder_path))?;
 
         let request = self
             .client
@@ -675,12 +716,12 @@ impl LLM for Gemini {
             .iter()
             .map(|d| {
                 format!(
-                    "[{}{}]：{}",
+                    "[玩家{}{}]：{}",
                     d.author_name,
                     if d.author_character.is_empty() {
                         "".to_string()
                     } else {
-                        format!("（{}）", d.author_character)
+                        format!("（角色名：{}）", d.author_character)
                     },
                     d.dialogue
                 )
@@ -707,6 +748,325 @@ impl LLM for Gemini {
 
         self.cached_context.remove(&user_id);
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
+
+    use chrono::Utc;
+    use insta::assert_json_snapshot;
+    use serenity::async_trait;
+    use sqlx::{Pool, Postgres};
+
+    use crate::{
+        character::{repository::CharacterSheetRepository, service::CharacterSheetService},
+        config::{AiDmConfig, ServiceConfig},
+        discord_bot::MessageSender,
+        llm::{LLM, gemini::Gemini},
+        pg_pool::{TestPgPool, TestPgPoolConfig},
+        story::{
+            entity::{DialogueEntity, StoryEntity},
+            repository::{DialogueRepository, StoryRepository},
+            service::StoryService,
+        },
+        tool::service::ToolService,
+    };
+
+    struct MockMessageSender;
+
+    #[async_trait]
+    impl MessageSender for MockMessageSender {
+        async fn send(&self, msg: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            println!("Mock send message: {}", msg);
+            Ok(())
+        }
+    }
+
+    async fn service_setup() -> Result<(Gemini, Pool<Postgres>, String), Box<dyn std::error::Error>>
+    {
+        let service_config: ServiceConfig<AiDmConfig> =
+            ServiceConfig::load("./config/config.yaml")?;
+        let db_config = service_config
+            .database
+            .as_ref()
+            .ok_or_else(|| crate::error::Error::MissingConfig("database"))?;
+        let timestamp = Utc::now().timestamp();
+        let db_name = format!("test_db_{}", timestamp);
+        let pg_pool = TestPgPool::init(TestPgPoolConfig {
+            migrations: "./migrations".into(),
+            db_name: db_name.clone(),
+            host: db_config.host.clone(),
+            port: db_config.port,
+            default_database: "postgres".to_owned(),
+            username: db_config.username.clone(),
+            password: db_config.password.clone(),
+        })
+        .await;
+        let pool = pg_pool.resource().await;
+
+        let character_sheet_repository =
+            Arc::new(CharacterSheetRepository::from_pool(pool.clone()));
+        let story_repository = Arc::new(StoryRepository::from_pool(pool.clone()));
+        let dialogue_repository = Arc::new(DialogueRepository::from_pool(pool.clone()));
+
+        let character_sheet_service = Arc::new(CharacterSheetService {
+            repo: character_sheet_repository,
+        });
+        let story_service = Arc::new(StoryService {
+            repository: story_repository,
+            dialogue_repository,
+            compile_trigger: 10,
+        });
+
+        Ok((
+            Gemini {
+                client: gemini_rust::Gemini::with_model(
+                    "mock_key",
+                    "models/gemini-3.1-flash-lite-preview".to_owned(),
+                )?,
+                tool_service: Arc::new(ToolService::new(
+                    character_sheet_service,
+                    Arc::clone(&story_service),
+                )),
+                story_service,
+                cached_context: HashMap::new(),
+                dm_discord_id: "1483098634601107476".to_owned(),
+                folder_path: "./prompts".to_string(),
+                compile_trigger: 4,
+            },
+            pool,
+            db_name,
+        ))
+    }
+
+    #[tokio::test]
+    async fn test_new_summary() -> Result<(), Box<dyn std::error::Error>> {
+        let (mut gemini_service, pool, _) = service_setup().await?;
+        let message_sender = MockMessageSender;
+
+        // No dialogues, should not generate summary
+        gemini_service.new_summary(&message_sender).await?;
+
+        let response: Vec<StoryEntity> = sqlx::query_as("SELECT * FROM story")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_eq!(response.len(), 0);
+
+        // Insert 10 dialogues to trigger summary generation
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('我在。泽阿里尔 已經準備好，但目前還沒有明確的當前場景。我先不硬開酒館或任務。你可以說：『開始遊戲』、『我們在廢棄礦洞入口』，或直接描述現在的位置和你想做的第一個動作。', 'DM', 'Unknown Adventurer - DM', '1483098634601107476', '2026-05-04 03:30:35.856215+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('当前在建卡步骤：选择职业。可回复：我选战士 / 我选游荡者 / 我选法师 / 我选牧师 / 我选游侠 / 我选圣武士。
+如果要退出，回复：取消建卡。', 'DM', 'Unknown Adventurer - DM', '1483098634601107476', '2026-05-04 03:30:51.083827+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('街角传来骚动，似乎有人在议论最近失踪的旅人……', 'DM (dnd-5)', 'Unknown Adventurer - DM (dnd-5)', '1483098634601107476', '2026-05-04 03:31:05.36322+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('我决定先喝酒', 'anyTHING', '庄芳宜', '1483098634601107486', '2026-05-04 03:32:05.36322+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('好的庄芳宜，她向酒保温柔的说了一句：“给我来杯你们这儿最好的葡萄酒”，过了一会儿酒保拿了酒过来，庄芳宜以娴熟优雅的姿态细细品尝', 'DM (dnd-5)', 'Unknown Adventurer - DM (dnd-5)', '1483098634601107476', '2026-05-04 03:33:05.36322+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues VALUES ('我要去找酒馆老板吵架，因为他欠我一百万铜币', 'shaomo1', '泽阿里尔', '1483098634601107489', '2026-05-04 03:34:05.36322+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        gemini_service.new_summary(&message_sender).await?;
+
+        let response: Vec<StoryEntity> = sqlx::query_as("SELECT * FROM story")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_json_snapshot!(response);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_new_dialogue() -> Result<(), Box<dyn std::error::Error>> {
+        let (mut gemini_service, pool, _) = service_setup().await?;
+        let message_sender = MockMessageSender;
+
+        // Dummy dialogue, should not be stored due to empty content
+        gemini_service
+            .store_new_dialogue(&message_sender, "", "", "")
+            .await?;
+
+        let response: Vec<DialogueEntity> = sqlx::query_as("SELECT * FROM dialogues")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_eq!(response.len(), 0);
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(&message_sender, "当前在建卡步骤：选择职业。可回复：我选战士 / 我选游荡者 / 我选法师 / 我选牧师 / 我选游侠 / 我选圣武士。
+如果要退出，回复：取消建卡。", "1483098634601107476", "dnd-5")
+            .await?;
+
+        let response: Vec<DialogueEntity> = sqlx::query_as("SELECT * FROM dialogues")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_eq!(response.len(), 0);
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "当前在建卡步骤：选择职业，但如果你已经决定背景，可以直接说“我在酒馆喝酒”进入剧情。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "系统提示：角色创建完成。
+你发现自己站在一间昏暗的酒馆里，空气中弥漫着酒精味。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "我可能会考虑去酒馆看看情况，但还没决定。",
+                "1483098634601107489",
+                "shaomo1",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "如果我攻击哥布林会发生什么？我拔出剑冲上去。",
+                "1483098634601107489",
+                "shaomo1",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "街角传来骚动，似乎有人在议论最近失踪的旅人……",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "你现在可以自由探索城镇，酒馆就在前方。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "三天后，你已经离开村庄，踏上前往北方的道路。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "泽阿里尔正在整理装备，而庄芳宜已经走进酒馆开始喝酒。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "（系统正在初始化）酒馆里人声鼎沸，冒险者们在讨论最近的失踪事件。",
+                "1483098634601107476",
+                "dnd-5",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "我决定先喝酒",
+                "1483098634601107486",
+                "anyTHING",
+            )
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(&message_sender, "喝酒。", "1483098634601107486", "anyTHING")
+            .await?;
+
+        sleep(Duration::from_secs(30));
+
+        gemini_service
+            .store_new_dialogue(
+                &message_sender,
+                "我退出游戏，不再继续剧情。",
+                "1483098634601107486",
+                "anyTHING",
+            )
+            .await?;
+
+        let response: Vec<DialogueEntity> = sqlx::query_as("SELECT * FROM dialogues")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_json_snapshot!(response);
         Ok(())
     }
 }

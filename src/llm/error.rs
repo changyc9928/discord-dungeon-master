@@ -22,4 +22,6 @@ pub enum LlmError {
     MissingContent(String),
     #[error(transparent)]
     StoryError(#[from] StoryError),
+    #[error(transparent)]
+    ParsingError(#[from] std::num::ParseIntError),
 }

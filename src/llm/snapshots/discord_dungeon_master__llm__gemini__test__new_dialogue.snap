@@ -1,0 +1,41 @@
+---
+source: src/llm/gemini.rs
+expression: response
+---
+[
+  {
+    "dialogue": "我拔出剑，冲上去攻击哥布林。",
+    "author_name": "shaomo1",
+    "author_character": "Unknown Adventurer - shaomo1",
+    "author_discord_id": "1483098634601107489",
+    "updated_at": "2026-05-04T07:37:17.369946Z"
+  },
+  {
+    "dialogue": "庄芳宜走进酒馆开始喝酒。",
+    "author_name": "庄芳宜",
+    "author_character": "Unknown Adventurer - 庄芳宜",
+    "author_discord_id": "1483098634601107476",
+    "updated_at": "2026-05-04T07:39:46.881435Z"
+  },
+  {
+    "dialogue": "泽阿里尔正在整理装备。",
+    "author_name": "泽阿里尔",
+    "author_character": "Unknown Adventurer - 泽阿里尔",
+    "author_discord_id": "1483098634601107476",
+    "updated_at": "2026-05-04T07:40:00.195571Z"
+  },
+  {
+    "dialogue": "我决定先喝酒",
+    "author_name": "anyTHING",
+    "author_character": "Unknown Adventurer - anyTHING",
+    "author_discord_id": "1483098634601107486",
+    "updated_at": "2026-05-04T07:41:28.978194Z"
+  },
+  {
+    "dialogue": "喝酒。",
+    "author_name": "anyTHING",
+    "author_character": "Unknown Adventurer - anyTHING",
+    "author_discord_id": "1483098634601107486",
+    "updated_at": "2026-05-04T07:42:30.869584Z"
+  }
+]

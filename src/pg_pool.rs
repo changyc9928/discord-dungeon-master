@@ -74,7 +74,7 @@ impl TestPgPool {
         .await
         .inspect_err(|error| {
             eprintln!(
-                "Failed to check existing template database for '{}': {error}",
+                "Failed to check existing database for '{}': {error}",
                 self.config.db_name
             );
         })

@@ -153,4 +153,5 @@ pub struct AiDmConfig {
     #[serde(default = "default_buffer_check_interval_seconds")]
     pub buffer_check_interval_seconds: u64,
     pub compile_trigger: i64,
+    pub promopts_folder_path: String,
 }

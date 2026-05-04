@@ -1,15 +1,15 @@
 -- Add migration script here
 CREATE TABLE story (
-    summary TEXT NOT NULL,
+    summary VARCHAR NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (updated_at)
 );
 
 CREATE TABLE dialogues (
-    dialogue TEXT NOT NULL,
-    author_name TEXT NOT NULL,
-    author_character TEXT NOT NULL,
-    author_discord_id TEXT NOT NULL,
+    dialogue VARCHAR NOT NULL,
+    author_name VARCHAR NOT NULL,
+    author_character VARCHAR NOT NULL,
+    author_discord_id VARCHAR NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     PRIMARY KEY (updated_at)

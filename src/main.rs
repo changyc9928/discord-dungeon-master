@@ -64,7 +64,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         &service_config.config.gemini_model,
         tool_service,
         story_service,
-        service_config.config.channel_id.parse().unwrap(),
+        service_config.config.dm_id.clone(),
+        service_config.config.promopts_folder_path,
+        service_config.config.compile_trigger,
     )?));
 
     let discord_token = service_config

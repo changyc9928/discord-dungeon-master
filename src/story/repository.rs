@@ -31,7 +31,7 @@ impl StoryRepository {
     pub async fn insert_new_story(&self, story: &str) -> Result<StoryEntity, StoryError> {
         Ok(sqlx::query_as::<_, StoryEntity>(
             r#"
-            INSERT INTO story (story, updated_at)
+            INSERT INTO story (summary, updated_at)
             VALUES ($1, NOW())
             RETURNING *
             "#,
@@ -92,7 +92,7 @@ impl DialogueRepository {
         Ok(sqlx::query_as::<_, DialogueEntity>(
             r#"
             SELECT * FROM dialogues
-            ORDER BY updated_at DESC
+            ORDER BY updated_at ASC
             LIMIT $1
             "#,
         )

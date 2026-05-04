@@ -25,3 +25,5 @@ buffered-message-expiry-seconds: 5
 buffer-check-interval-seconds: 2
 
 compile-trigger: 10
+
+promopts-folder-path: "/app/prompts"
