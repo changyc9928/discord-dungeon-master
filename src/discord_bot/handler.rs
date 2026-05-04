@@ -80,7 +80,12 @@ async fn event_handler(
         let response = llm
             .lock()
             .await
-            .conversation_continue(&message_sender, &author_id, &new_message.content)
+            .conversation_continue(
+                &message_sender,
+                &author_id,
+                &author_name,
+                &new_message.content,
+            )
             .await;
         let response = match response {
             Ok(r) => r,
@@ -293,7 +298,12 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
         .llm
         .lock()
         .await
-        .request_to_llm(&message_sender, primary_author, &compiled_content)
+        .request_to_llm(
+            &message_sender,
+            &messages.last().unwrap().author_name,
+            primary_author,
+            &compiled_content,
+        )
         .await
     {
         Ok(response) => {

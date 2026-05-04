@@ -20,7 +20,7 @@ serde_yaml = "0"
 stable-eyre = "0.2.2"
 strum = { version = "0.28.0", features = ["std", "derive", "strum_macros"] }
 faux = "0.1.13"
-insta = { version = "1.46.3", features = ["json"] }
+insta = { version = "1.46.3", features = ["json", "redactions"] }
 async-trait = "0.1.89"
 gemini-rust = "1.7"
 poise = "0.6"

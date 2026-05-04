@@ -212,8 +212,6 @@ pub struct UpdateCharacterLevelRequest {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct NewDialogueRequest {
     pub discord_id: String,
-    pub message: String,
-    pub author_name: String,
 }
 
 pub trait GetToolInfo {

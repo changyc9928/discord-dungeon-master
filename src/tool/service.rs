@@ -35,16 +35,11 @@ impl ToolService {
                     .await;
                 let character_name = match character {
                     Ok(character) => character.identity.character_name,
-                    _ => format!("Unknown Adventurer - {}", new_dialogue.author_name),
+                    _ => format!("Unknown Adventurer - {}", new_dialogue.discord_id),
                 };
                 serde_json::to_value(
                     self.story_service
-                        .insert_new_dialogue(
-                            &new_dialogue.message,
-                            &new_dialogue.author_name,
-                            &character_name,
-                            &new_dialogue.discord_id,
-                        )
+                        .insert_new_dialogue("", "", &character_name, &new_dialogue.discord_id)
                         .await?,
                 )?
             }

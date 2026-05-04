@@ -18,10 +18,13 @@ use tokio::time::sleep;
 use tracing::{debug, info, warn};
 
 use crate::{
-    character::entity::{
-        CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
-        inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
-        skills::Skills, traits::Traits,
+    character::{
+        entity::{
+            CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
+            inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
+            skills::Skills, traits::Traits,
+        },
+        service::CharacterSheetService,
     },
     discord_bot::MessageSender,
     llm::{LLM, error::LlmError},
@@ -67,6 +70,7 @@ pub struct Gemini {
     client: gemini_rust::Gemini,
     tool_service: Arc<ToolService>,
     story_service: Arc<StoryService>,
+    character_sheet_service: Arc<CharacterSheetService>,
     cached_context: HashMap<String, GenerateContentRequest>,
     dm_discord_id: String,
     folder_path: String,
@@ -78,6 +82,7 @@ impl Gemini {
         model: &str,
         tool_service: Arc<ToolService>,
         story_service: Arc<StoryService>,
+        character_sheet_service: Arc<CharacterSheetService>,
         dm_discord_id: String,
         folder_path: String,
         compile_trigger: i64,
@@ -88,6 +93,7 @@ impl Gemini {
             client,
             tool_service,
             story_service,
+            character_sheet_service,
             cached_context: HashMap::new(),
             dm_discord_id,
             folder_path,
@@ -226,6 +232,7 @@ impl Gemini {
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
         prompt: &str,
     ) -> Result<String, LlmError>
     where
@@ -257,6 +264,7 @@ impl Gemini {
         self.conversation_continue(
             ctx,
             discord_user_id,
+            discord_username,
             &format!(
                 "我的Discord ID是{}，你好，请问你需要什么信息？",
                 discord_user_id
@@ -304,6 +312,7 @@ impl LLM for Gemini {
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
         let mut remove_cache_flag = None;
@@ -358,8 +367,6 @@ impl LLM for Gemini {
 
             let response_text = response.text();
             if !response_text.is_empty() {
-                // let channel_id = ChannelId::new(self.channel_id.parse()?);
-                // let response = channel_id.say(ctx, response_text).await;
                 let response = ctx.send(response_text).await;
                 if let Err(e) = response {
                     let response = self.client.generate_content();
@@ -392,6 +399,53 @@ impl LLM for Gemini {
                         cache_removed: true,
                         discord_id: discord_user_id.to_owned(),
                     })?
+                } else if function_call.name == NewDialogueRequest::get_tool_name().0 {
+                    debug!(
+                        discord_user_id = %discord_user_id,
+                        tool_name = %function_call.name,
+                        "Storing new dialogue"
+                    );
+
+                    let character = self
+                        .character_sheet_service
+                        .get_character(discord_user_id)
+                        .await;
+                    let character_name = match character {
+                        Ok(character) => character.identity.character_name,
+                        _ => format!(
+                            "Unknown Adventurer - {}",
+                            discord_user_id
+                                .split("_")
+                                .collect::<Vec<_>>()
+                                .first()
+                                .ok_or_else(|| {
+                                    LlmError::MissingContent("discord_user_id".to_string())
+                                })?
+                        ),
+                    };
+                    serde_json::to_value(
+                        self.story_service
+                            .insert_new_dialogue(
+                                discord_channel_message
+                                    .split_once(":")
+                                    .ok_or_else(|| {
+                                        LlmError::MissingContent(
+                                            "discord_channel_message".to_string(),
+                                        )
+                                    })?
+                                    .1,
+                                discord_username,
+                                &character_name,
+                                discord_user_id
+                                    .split("_")
+                                    .collect::<Vec<_>>()
+                                    .first()
+                                    .ok_or_else(|| {
+                                        LlmError::MissingContent("discord_user_id".to_string())
+                                    })?,
+                            )
+                            .await?,
+                    )?
                 } else {
                     debug!(
                         discord_user_id = %discord_user_id,
@@ -437,22 +491,30 @@ impl LLM for Gemini {
     async fn add_character_spells(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_spells.txt", self.folder_path))?;
-        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(ctx, discord_user_id, &prompt)
-            .await
+        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(
+            ctx,
+            discord_username,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_abilities(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_abilities.txt", self.folder_path))?;
         self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
             ctx,
+            discord_username,
             discord_user_id,
             &prompt,
         )
@@ -462,52 +524,73 @@ impl LLM for Gemini {
     async fn add_character_skills(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_skills.txt", self.folder_path))?;
-        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(ctx, discord_user_id, &prompt)
-            .await
+        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(
+            ctx,
+            discord_username,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_traits(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_traits.txt", self.folder_path))?;
-        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(ctx, discord_user_id, &prompt)
-            .await
+        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(
+            ctx,
+            discord_username,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_notes(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_notes.txt", self.folder_path))?;
-        self.add_character_with_tool::<NotesWithDiscordId, Notes>(ctx, discord_user_id, &prompt)
-            .await
+        self.add_character_with_tool::<NotesWithDiscordId, Notes>(
+            ctx,
+            discord_username,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_meta(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_meta.txt", self.folder_path))?;
-        self.add_character_with_tool::<Meta, Meta>(ctx, discord_user_id, &prompt)
+        self.add_character_with_tool::<Meta, Meta>(ctx, discord_username, discord_user_id, &prompt)
             .await
     }
 
     async fn add_character_identity(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_identity.txt", self.folder_path))?;
         self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
             ctx,
+            discord_username,
             discord_user_id,
             &prompt,
         )
@@ -517,6 +600,7 @@ impl LLM for Gemini {
     async fn add_character_progression(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!(
@@ -525,6 +609,7 @@ impl LLM for Gemini {
         ))?;
         self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
             ctx,
+            discord_username,
             discord_user_id,
             &prompt,
         )
@@ -534,22 +619,30 @@ impl LLM for Gemini {
     async fn add_character_combat(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_combat.txt", self.folder_path))?;
-        self.add_character_with_tool::<CombatWithDiscordId, Combat>(ctx, discord_user_id, &prompt)
-            .await
+        self.add_character_with_tool::<CombatWithDiscordId, Combat>(
+            ctx,
+            discord_username,
+            discord_user_id,
+            &prompt,
+        )
+        .await
     }
 
     async fn add_character_inventory(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_inventory.txt", self.folder_path))?;
         self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
             ctx,
+            discord_username,
             discord_user_id,
             &prompt,
         )
@@ -559,6 +652,7 @@ impl LLM for Gemini {
     async fn request_to_llm(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
@@ -645,7 +739,7 @@ DM的discord ID为{}
         self.merge_request(request, &discord_user_id)?;
 
         let reply = self
-            .conversation_continue(ctx, &discord_user_id, &message)
+            .conversation_continue(ctx, discord_username, &discord_user_id, &message)
             .await?;
 
         self.cached_context.remove(&discord_user_id);
@@ -685,7 +779,11 @@ DM的discord ID为{}",
         self.conversation_continue(
             ctx,
             &author_id_with_timestamp,
-            &format!("{} {}: {}", author_id, author_name, message),
+            author_name,
+            &format!(
+                "用户Discord ID {}; 用户名 {}: {}",
+                author_id, author_name, message
+            ),
         )
         .await?;
 
@@ -740,7 +838,9 @@ DM的discord ID为{}",
 请基于以上信息，生成一段更新后的完整剧情总结。"
         );
 
-        let res = self.conversation_continue(ctx, &user_id, &message).await?;
+        let res = self
+            .conversation_continue(ctx, "system", &user_id, &message)
+            .await?;
 
         self.story_service.insert_new_story(&res).await?;
 
@@ -762,7 +862,23 @@ mod test {
     use sqlx::{Pool, Postgres};
 
     use crate::{
-        character::{repository::CharacterSheetRepository, service::CharacterSheetService},
+        character::{
+            entity::{
+                CharacterSheet,
+                abilities_block::AbilitiesBlock,
+                combat::Combat,
+                identity::{Characteristics, Identity},
+                inventory::Inventory,
+                magic::Magic,
+                meta::Meta,
+                notes::Notes,
+                progression::Progression,
+                skills::Skills,
+                traits::Traits,
+            },
+            repository::CharacterSheetRepository,
+            service::CharacterSheetService,
+        },
         config::{AiDmConfig, ServiceConfig},
         discord_bot::MessageSender,
         llm::{LLM, gemini::Gemini},
@@ -828,10 +944,11 @@ mod test {
                     "models/gemini-3.1-flash-lite-preview".to_owned(),
                 )?,
                 tool_service: Arc::new(ToolService::new(
-                    character_sheet_service,
+                    Arc::clone(&character_sheet_service),
                     Arc::clone(&story_service),
                 )),
                 story_service,
+                character_sheet_service,
                 cached_context: HashMap::new(),
                 dm_discord_id: "1483098634601107476".to_owned(),
                 folder_path: "./prompts".to_string(),
@@ -909,6 +1026,48 @@ mod test {
     async fn test_new_dialogue() -> Result<(), Box<dyn std::error::Error>> {
         let (mut gemini_service, pool, _) = service_setup().await?;
         let message_sender = MockMessageSender;
+
+        sqlx::query_as::<_, CharacterSheet>(
+            r#"
+        INSERT INTO character_sheets (
+            id,
+            meta,
+            identity,
+            progression,
+            combat,
+            abilities_block,
+            skills,
+            magic,
+            inventory,
+            traits,
+            notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT (id) DO UPDATE SET
+            identity = EXCLUDED.identity
+        RETURNING *
+        "#,
+        )
+        .bind("1483098634601107486")
+        .bind(Meta::default())
+        .bind(Identity {
+            character_name: "庄芳宜".to_string(),
+            species: "人类".to_string(),
+            sub_species: Some("人类".to_string()),
+            class: "战士".to_string(),
+            sub_class: Some("剑士".to_string()),
+            characteristics: Characteristics::default(),
+        })
+        .bind(Progression::default())
+        .bind(Combat::default())
+        .bind(AbilitiesBlock::default())
+        .bind(Skills::default())
+        .bind(Magic::default())
+        .bind(Inventory::default())
+        .bind(Traits::default())
+        .bind(Notes::default())
+        .fetch_one(&pool)
+        .await?;
 
         // Dummy dialogue, should not be stored due to empty content
         gemini_service
@@ -1066,7 +1225,9 @@ mod test {
             .fetch_all(&pool)
             .await?;
 
-        assert_json_snapshot!(response);
+        assert_json_snapshot!(response, {
+            "[].updated_at" => "[timestamp]",
+        });
         Ok(())
     }
 }

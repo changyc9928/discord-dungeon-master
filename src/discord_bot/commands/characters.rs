@@ -21,7 +21,11 @@ pub async fn add_character_meta(ctx: Context<'_>) -> Result<(), DiscordBotError>
     let response = llm
         .lock()
         .await
-        .add_character_meta(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_meta(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -48,7 +52,11 @@ pub async fn add_character_identity(ctx: Context<'_>) -> Result<(), DiscordBotEr
     let response = llm
         .lock()
         .await
-        .add_character_identity(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_identity(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -75,7 +83,11 @@ pub async fn add_character_progression(ctx: Context<'_>) -> Result<(), DiscordBo
     let response = llm
         .lock()
         .await
-        .add_character_progression(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_progression(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -102,7 +114,11 @@ pub async fn add_character_combat(ctx: Context<'_>) -> Result<(), DiscordBotErro
     let response = llm
         .lock()
         .await
-        .add_character_combat(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_combat(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -129,7 +145,11 @@ pub async fn add_character_inventory(ctx: Context<'_>) -> Result<(), DiscordBotE
     let response = llm
         .lock()
         .await
-        .add_character_inventory(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_inventory(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -156,7 +176,11 @@ pub async fn add_character_spells(ctx: Context<'_>) -> Result<(), DiscordBotErro
     let response = llm
         .lock()
         .await
-        .add_character_spells(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_spells(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -183,7 +207,11 @@ pub async fn add_character_abilities(ctx: Context<'_>) -> Result<(), DiscordBotE
     let response = llm
         .lock()
         .await
-        .add_character_abilities(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_abilities(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -210,7 +238,11 @@ pub async fn add_character_skills(ctx: Context<'_>) -> Result<(), DiscordBotErro
     let response = llm
         .lock()
         .await
-        .add_character_skills(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_skills(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -237,7 +269,11 @@ pub async fn add_character_traits(ctx: Context<'_>) -> Result<(), DiscordBotErro
     let response = llm
         .lock()
         .await
-        .add_character_traits(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_traits(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -264,7 +300,11 @@ pub async fn add_character_notes(ctx: Context<'_>) -> Result<(), DiscordBotError
     let response = llm
         .lock()
         .await
-        .add_character_notes(&message_sender, ctx.author().id.to_string().as_str())
+        .add_character_notes(
+            &message_sender,
+            ctx.author().id.to_string().as_str(),
+            ctx.author().name.as_str(),
+        )
         .await?;
 
     let reply = CreateReply::default().content(response);

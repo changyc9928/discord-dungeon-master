@@ -10,6 +10,7 @@ pub trait LLM: Send + Sync {
     async fn request_to_llm(
         &mut self,
         ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;
@@ -18,6 +19,7 @@ pub trait LLM: Send + Sync {
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError>;
 
@@ -25,60 +27,70 @@ pub trait LLM: Send + Sync {
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_identity(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_progression(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_combat(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_inventory(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_spells(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_abilities(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_skills(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_traits(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn add_character_notes(
         &mut self,
         ctx: &dyn MessageSender,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError>;
 
     async fn store_new_dialogue(
