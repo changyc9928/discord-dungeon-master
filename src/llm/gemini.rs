@@ -420,16 +420,17 @@ impl LLM for Gemini {
                         .await;
                     let character_name = match character {
                         Ok(character) => character.identity.character_name,
-                        _ => format!(
-                            "Unknown Adventurer - {}",
-                            discord_user_id
-                                .split("_")
-                                .collect::<Vec<_>>()
-                                .first()
-                                .ok_or_else(|| {
-                                    LlmError::MissingContent("discord_user_id".to_string())
-                                })?
-                        ),
+                        _ => {
+                            let split_id = discord_user_id.split("_").collect::<Vec<_>>();
+                            let discord_id = split_id.first().ok_or_else(|| {
+                                LlmError::MissingContent("discord_user_id".to_string())
+                            })?;
+                            if *discord_id == self.dm_discord_id {
+                                "Dungeon Master".to_string()
+                            } else {
+                                format!("Unknown Adventurer - {}", discord_id)
+                            }
+                        }
                     };
                     serde_json::to_value(
                         self.story_service
@@ -1088,7 +1089,7 @@ mod test {
 
         assert_eq!(response.len(), 0);
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(&message_sender, "当前在建卡步骤：选择职业。可回复：我选战士 / 我选游荡者 / 我选法师 / 我选牧师 / 我选游侠 / 我选圣武士。
@@ -1101,7 +1102,7 @@ mod test {
 
         assert_eq!(response.len(), 0);
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1112,7 +1113,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1124,7 +1125,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1135,7 +1136,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1146,7 +1147,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1157,7 +1158,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1168,7 +1169,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1179,7 +1180,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1190,7 +1191,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1201,7 +1202,7 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(
@@ -1212,13 +1213,13 @@ mod test {
             )
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(&message_sender, "喝酒。", "1483098634601107486", "anyTHING")
             .await?;
 
-        sleep(Duration::from_secs(30));
+        sleep(Duration::from_secs(5));
 
         gemini_service
             .store_new_dialogue(

@@ -4,6 +4,13 @@ expression: response
 ---
 [
   {
+    "dialogue": " 系统提示：角色创建完成。\n你发现自己站在一间昏暗的酒馆里，空气中弥漫着酒精味。",
+    "author_name": "dnd-5",
+    "author_character": "Dungeon Master",
+    "author_discord_id": "1483098634601107476",
+    "updated_at": "[timestamp]"
+  },
+  {
     "dialogue": " 如果我攻击哥布林会发生什么？我拔出剑冲上去。",
     "author_name": "shaomo1",
     "author_character": "Unknown Adventurer - 1483098634601107489",
@@ -11,23 +18,37 @@ expression: response
     "updated_at": "[timestamp]"
   },
   {
+    "dialogue": " 街角传来骚动，似乎有人在议论最近失踪的旅人……",
+    "author_name": "dnd-5",
+    "author_character": "Dungeon Master",
+    "author_discord_id": "1483098634601107476",
+    "updated_at": "[timestamp]"
+  },
+  {
     "dialogue": " 泽阿里尔正在整理装备，而庄芳宜已经走进酒馆开始喝酒。",
     "author_name": "dnd-5",
-    "author_character": "Unknown Adventurer - 1483098634601107476",
+    "author_character": "Dungeon Master",
+    "author_discord_id": "1483098634601107476",
+    "updated_at": "[timestamp]"
+  },
+  {
+    "dialogue": " （系统正在初始化）酒馆里人声鼎沸，冒险者们在讨论最近的失踪事件。",
+    "author_name": "dnd-5",
+    "author_character": "Dungeon Master",
     "author_discord_id": "1483098634601107476",
     "updated_at": "[timestamp]"
   },
   {
     "dialogue": " 我决定先喝酒",
     "author_name": "anyTHING",
-    "author_character": "Unknown Adventurer - 1483098634601107486",
+    "author_character": "庄芳宜",
     "author_discord_id": "1483098634601107486",
     "updated_at": "[timestamp]"
   },
   {
     "dialogue": " 喝酒。",
     "author_name": "anyTHING",
-    "author_character": "Unknown Adventurer - 1483098634601107486",
+    "author_character": "庄芳宜",
     "author_discord_id": "1483098634601107486",
     "updated_at": "[timestamp]"
   }
