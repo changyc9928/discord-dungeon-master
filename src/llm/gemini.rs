@@ -866,7 +866,6 @@ mod test {
     use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
 
     use chrono::Utc;
-    use gemini_rust::Model;
     use insta::assert_json_snapshot;
     use serenity::async_trait;
     use sqlx::{Pool, Postgres};
