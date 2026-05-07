@@ -428,7 +428,7 @@ impl LLM for Gemini {
                             if *discord_id == self.dm_discord_id {
                                 "Dungeon Master".to_string()
                             } else {
-                                format!("Unknown Adventurer - {}", discord_id)
+                                format!("Unknown Adventurer - {}", discord_username)
                             }
                         }
                     };
@@ -848,7 +848,7 @@ DM的discord ID为{}",
         );
 
         let res = self
-            .conversation_continue(ctx, "system", &user_id, &message)
+            .conversation_continue(ctx, &user_id, "system", &message)
             .await?;
 
         self.story_service.insert_new_story(&res).await?;
@@ -919,7 +919,7 @@ mod test {
             .as_ref()
             .ok_or_else(|| crate::error::Error::MissingConfig("database"))?;
         let timestamp = Utc::now().timestamp();
-        let db_name = format!("test_db_{}", timestamp);
+        let db_name = format!("test_db_{}_{}", timestamp, rand::random::<u16>());
         let pg_pool = TestPgPool::init(TestPgPoolConfig {
             migrations: "./migrations".into(),
             db_name: db_name.clone(),
@@ -982,41 +982,47 @@ mod test {
 
         assert_eq!(response.len(), 0);
 
-        // Insert 10 dialogues to trigger summary generation
+        // Insert dialogues to trigger summary generation
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('我在。泽阿里尔 已經準備好，但目前還沒有明確的當前場景。我先不硬開酒館或任務。你可以說：『開始遊戲』、『我們在廢棄礦洞入口』，或直接描述現在的位置和你想做的第一個動作。', 'DM', 'Unknown Adventurer - DM', '1483098634601107476', '2026-05-04 03:30:35.856215+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 系统提示：角色创建完成。
+你发现自己站在一间昏暗的酒馆里，空气中弥漫着酒精味。', 'dnd-5', 'Dungeon Master', '1483098634601107476', '2026-05-07 02:37:56.756385+00')",
             )
             .execute(&pool)
             .await?;
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('当前在建卡步骤：选择职业。可回复：我选战士 / 我选游荡者 / 我选法师 / 我选牧师 / 我选游侠 / 我选圣武士。
-如果要退出，回复：取消建卡。', 'DM', 'Unknown Adventurer - DM', '1483098634601107476', '2026-05-04 03:30:51.083827+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 如果我攻击哥布林会发生什么？我拔出剑冲上去。', 'shaomo1', 'Unknown Adventurer - shaomo1', '1483098634601107489', '2026-05-07 02:38:52.373598+00')",
             )
             .execute(&pool)
             .await?;
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('街角传来骚动，似乎有人在议论最近失踪的旅人……', 'DM (dnd-5)', 'Unknown Adventurer - DM (dnd-5)', '1483098634601107476', '2026-05-04 03:31:05.36322+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 街角传来骚动，似乎有人在议论最近失踪的旅人……', 'dnd-5', 'Dungeon Master', '1483098634601107476', '2026-05-07 02:39:22.069725+00')",
             )
             .execute(&pool)
             .await?;
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('我决定先喝酒', 'anyTHING', '庄芳宜', '1483098634601107486', '2026-05-04 03:32:05.36322+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 泽阿里尔正在整理装备，而庄芳宜已经走进酒馆开始喝酒。', 'dnd-5', 'Dungeon Master', '1483098634601107476', '2026-05-07 02:40:55.613852+00')",
             )
             .execute(&pool)
             .await?;
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('好的庄芳宜，她向酒保温柔的说了一句：“给我来杯你们这儿最好的葡萄酒”，过了一会儿酒保拿了酒过来，庄芳宜以娴熟优雅的姿态细细品尝', 'DM (dnd-5)', 'Unknown Adventurer - DM (dnd-5)', '1483098634601107476', '2026-05-04 03:33:05.36322+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' （系统正在初始化）酒馆里人声鼎沸，冒险者们在讨论最近的失踪事件。', 'dnd-5', 'Dungeon Master', '1483098634601107476', '2026-05-07 02:41:29.238675+00')",
             )
             .execute(&pool)
             .await?;
 
         sqlx::query(
-                "INSERT INTO public.dialogues VALUES ('我要去找酒馆老板吵架，因为他欠我一百万铜币', 'shaomo1', '泽阿里尔', '1483098634601107489', '2026-05-04 03:34:05.36322+00')",
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 我决定先喝酒', 'anyTHING', '庄芳宜', '1483098634601107486', '2026-05-07 02:41:56.587162+00')",
+            )
+            .execute(&pool)
+            .await?;
+
+        sqlx::query(
+                "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 喝酒。', 'anyTHING', '庄芳宜', '1483098634601107486', '2026-05-07 02:42:19.420479+00')",
             )
             .execute(&pool)
             .await?;
@@ -1027,7 +1033,9 @@ mod test {
             .fetch_all(&pool)
             .await?;
 
-        assert_json_snapshot!(response);
+        assert_json_snapshot!(response, {
+            "[].updated_at" => "[timestamp]",
+        });
         Ok(())
     }
 
