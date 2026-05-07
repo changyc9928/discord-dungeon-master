@@ -316,9 +316,11 @@ impl CharacterSheetService {
         &self,
         discord_id: &str,
         level: i64,
+        experience: i64,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
         character.progression.level = level;
+        character.progression.xp = experience;
         character.progression.update_progression();
         self.upsert_character(character).await
     }
@@ -712,6 +714,8 @@ Spell attack modifier = your proficiency bonus + your Charisma modifier"
                         duration: None,
                         trigger: None,
                         cooldown: None,
+                        used_charges: None,
+                        max_charges: None,
                     },
                     FeatureTraits {
                         name: "Dragon Ancestor".to_owned(),
@@ -727,6 +731,8 @@ You can speak, read, and write Draconic. Additionally, whenever you make a \
                         duration: None,
                         trigger: None,
                         cooldown: None,
+                        used_charges: None,
+                        max_charges: None,
                     },
                 ],
             },

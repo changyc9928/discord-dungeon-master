@@ -207,6 +207,7 @@ pub struct UpdateMaxHpRequest {
 pub struct UpdateCharacterLevelRequest {
     pub discord_id: String,
     pub level: i64,
+    pub experience: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -267,7 +268,7 @@ impl GetToolInfo for AddSpellRequest {
     fn get_tool_name() -> (String, String) {
         (
             "add_spell".to_owned(),
-            "根据用户的 Discord ID 来插入新的法术".to_owned(),
+            "根据用户的 Discord ID 来添加新的法术".to_owned(),
         )
     }
 }

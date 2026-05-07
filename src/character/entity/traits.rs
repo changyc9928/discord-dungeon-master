@@ -60,4 +60,6 @@ pub struct FeatureTraits {
     pub duration: Option<String>, // Duration of effect
     pub trigger: Option<String>,  // Trigger conditions (e.g., "when hit by an attack")
     pub cooldown: Option<i64>,    // Cooldown time in rounds
+    pub used_charges: Option<i64>,
+    pub max_charges: Option<i64>,
 }

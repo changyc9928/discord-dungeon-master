@@ -154,6 +154,7 @@ impl ToolService {
                     .update_character_level(
                         &update_character_level_request.discord_id,
                         update_character_level_request.level,
+                        update_character_level_request.experience,
                     )
                     .await?,
             )?,
