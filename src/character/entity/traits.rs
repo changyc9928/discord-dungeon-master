@@ -13,7 +13,8 @@ use sqlx::{
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Traits {
-    pub features_and_traits: Vec<FeatureTraits>,
+    pub unlocked_features_and_traits: Vec<FeatureTraits>,
+    pub locked_features_and_traits: Vec<LockedFeatureTraits>,
 }
 
 // Tell SQLx that Traits can be decoded from JSONB
@@ -62,4 +63,13 @@ pub struct FeatureTraits {
     pub cooldown: Option<i64>,    // Cooldown time in rounds
     pub used_charges: Option<i64>,
     pub max_charges: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LockedFeatureTraits {
+    #[serde(flatten)]
+    pub feature: FeatureTraits,
+    pub unlock_level: Option<i64>,
+    pub unlock_condition: Option<String>,
 }

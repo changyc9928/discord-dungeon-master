@@ -61,7 +61,7 @@ impl CharacterSheetService {
         entity.progression.proficiencies.weapons.sort();
         entity
             .traits
-            .features_and_traits
+            .unlocked_features_and_traits
             .sort_by_key(|f| f.name.clone());
         Ok(entity)
     }
@@ -86,7 +86,7 @@ impl CharacterSheetService {
         entity.progression.proficiencies.weapons.sort();
         entity
             .traits
-            .features_and_traits
+            .unlocked_features_and_traits
             .sort_by_key(|f| f.name.clone());
         Ok(entity)
     }
@@ -692,7 +692,7 @@ mod test {
                 ],
             },
             traits: Traits {
-                features_and_traits: vec![
+                unlocked_features_and_traits: vec![
                     FeatureTraits {
                         name: "Spellcasting Ability".to_owned(),
                         description: "Charisma is your spellcasting ability \
@@ -735,6 +735,7 @@ You can speak, read, and write Draconic. Additionally, whenever you make a \
                         max_charges: None,
                     },
                 ],
+                locked_features_and_traits: vec![],
             },
             notes: Notes {
                 organizations: None,
