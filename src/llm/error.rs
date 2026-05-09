@@ -1,3 +1,8 @@
+use rig::{
+    client::ProviderClientError,
+    completion::{CompletionError, PromptError},
+};
+
 use crate::{character, story::error::StoryError};
 
 #[derive(Debug, thiserror::Error)]
@@ -24,4 +29,10 @@ pub enum LlmError {
     StoryError(#[from] StoryError),
     #[error(transparent)]
     ParsingError(#[from] std::num::ParseIntError),
+    #[error(transparent)]
+    ProviderClientError(#[from] ProviderClientError),
+    #[error(transparent)]
+    PromptError(#[from] PromptError),
+    #[error(transparent)]
+    CompletionError(#[from] CompletionError),
 }

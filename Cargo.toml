@@ -10,7 +10,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 rand = "0.10"
-rig-core = "0.3.0"
 schemars = "1.2" # Required for Tool argument schemas
 config = "0.15"
 tracing = "0.1"
@@ -27,3 +26,5 @@ poise = "0.6"
 serenity = { version = "0.12", features = ["client", "gateway", "interactions_endpoint", "cache"] }
 chrono = "0.4.44"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+rig = "0.36"
+dotenvy = "0.15"

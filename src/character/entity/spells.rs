@@ -11,35 +11,28 @@ use sqlx::{
 
 use crate::character::entity::Ability;
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
-#[serde(rename_all = "camelCase")]
-#[schemars(inline)]
-pub struct Magic {
-    pub spells: Spells,
-}
-
-// Tell SQLx that Magic can be decoded from JSONB
-impl Type<Postgres> for Magic {
+// Tell SQLx that Spells can be decoded from JSONB
+impl Type<Postgres> for Spells {
     fn type_info() -> PgTypeInfo {
         PgTypeInfo::with_name("jsonb")
     }
 }
 
-// Implement Decode to convert a JSONB value into Magic
-impl<'r> Decode<'r, Postgres> for Magic {
+// Implement Decode to convert a JSONB value into Spells
+impl<'r> Decode<'r, Postgres> for Spells {
     fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn StdError + 'static + Send + Sync>> {
         // PostgreSQL JSONB is stored as text, so we deserialize from bytes
         let bytes = value.as_bytes()?;
         if bytes.is_empty() {
             return Err("Empty JSONB column".into());
         }
-        let meta: Magic = serde_json::from_slice(&bytes[1..])?; // skip version byte
+        let meta: Spells = serde_json::from_slice(&bytes[1..])?; // skip version byte
         Ok(meta)
     }
 }
 
-// Encode: convert Magic into JSONB column
-impl Encode<'_, Postgres> for Magic {
+// Encode: convert Spells into JSONB column
+impl Encode<'_, Postgres> for Spells {
     fn encode_by_ref(
         &self,
         buf: &mut PgArgumentBuffer,
@@ -74,6 +67,9 @@ pub struct Spell {
     pub level: i64,
     pub cast_time: String,
     pub range: String,
+    #[schemars(
+        description = "The required value for the spell to affect a target, either as an attack hit threshold or a saving throw DC. Required for spells that use attack rolls or saving throws, such as Thunderwave."
+    )]
     pub hit_dc: Option<i64>,
     pub effect: String,
 }

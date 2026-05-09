@@ -5,7 +5,7 @@ use strum::Display;
 
 use crate::character::entity::{
     abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
-    magic::Magic, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
+    spells::Spells, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
     traits::Traits,
 };
 
@@ -13,7 +13,7 @@ pub mod abilities_block;
 pub mod combat;
 pub mod identity;
 pub mod inventory;
-pub mod magic;
+pub mod spells;
 pub mod meta;
 pub mod notes;
 pub mod progression;
@@ -57,7 +57,7 @@ pub struct CharacterSheet {
     pub combat: Combat,
     pub abilities_block: AbilitiesBlock,
     pub skills: Skills,
-    pub magic: Magic,
+    pub magic: Spells,
     pub inventory: Inventory,
     pub traits: Traits,
     pub notes: Notes,

@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use crate::character::{
     entity::{
         CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
-        inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
-        skills::Skills, traits::Traits,
+        inventory::Inventory, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
+        spells::Spells, traits::Traits,
     },
     error::CharacterSheetError,
 };
@@ -103,7 +103,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -144,7 +144,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -185,7 +185,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -226,7 +226,7 @@ impl CharacterSheetRepository {
         .bind(combat)
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -267,7 +267,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(inventory)
         .bind(Traits::default())
         .bind(Notes::default())
@@ -277,7 +277,7 @@ impl CharacterSheetRepository {
 
     pub async fn update_character_spells(
         &self,
-        spells: &Magic,
+        spells: &Spells,
         discord_id: &str,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         Ok(sqlx::query_as::<_, CharacterSheet>(
@@ -297,7 +297,7 @@ impl CharacterSheetRepository {
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         ON CONFLICT (id) DO UPDATE SET
-            spells = EXCLUDED.spells
+            magic = EXCLUDED.magic
         RETURNING *
         "#,
         )
@@ -349,7 +349,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(abilities)
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -390,7 +390,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(skills)
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
@@ -431,7 +431,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(traits)
         .bind(Notes::default())
@@ -472,7 +472,7 @@ impl CharacterSheetRepository {
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(notes)

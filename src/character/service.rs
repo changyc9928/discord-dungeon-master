@@ -7,11 +7,11 @@ use crate::character::{
         combat::Combat,
         identity::Identity,
         inventory::{Inventory, Item},
-        magic::{Magic, Spell, SpellSlot},
         meta::Meta,
         notes::Notes,
         progression::Progression,
         skills::Skills,
+        spells::{Spell, SpellSlot, Spells},
         traits::Traits,
     },
     error::CharacterSheetError,
@@ -52,8 +52,8 @@ impl CharacterSheetService {
         entity.combat.senses.sort_by_key(|f| f.name.clone());
         entity.combat.speed.sort_by_key(|f| f.name.clone());
         entity.inventory.items.sort_by_key(|f| f.name.clone());
-        entity.magic.spells.spell_slots.sort_by_key(|f| f.level);
-        entity.magic.spells.spells.sort_by_key(|f| f.name.clone());
+        entity.magic.spell_slots.sort_by_key(|f| f.level);
+        entity.magic.spells.sort_by_key(|f| f.name.clone());
         entity.meta.extra_creatures.sort();
         entity.progression.proficiencies.armor.sort();
         entity.progression.proficiencies.languages.sort();
@@ -77,8 +77,8 @@ impl CharacterSheetService {
         entity.combat.senses.sort_by_key(|f| f.name.clone());
         entity.combat.speed.sort_by_key(|f| f.name.clone());
         entity.inventory.items.sort_by_key(|f| f.name.clone());
-        entity.magic.spells.spell_slots.sort_by_key(|f| f.level);
-        entity.magic.spells.spells.sort_by_key(|f| f.name.clone());
+        entity.magic.spell_slots.sort_by_key(|f| f.level);
+        entity.magic.spells.sort_by_key(|f| f.name.clone());
         entity.meta.extra_creatures.sort();
         entity.progression.proficiencies.armor.sort();
         entity.progression.proficiencies.languages.sort();
@@ -158,8 +158,8 @@ impl CharacterSheetService {
     pub async fn add_character_spells(
         &self,
         discord_id: &str,
-        spells: &Magic,
-    ) -> Result<Magic, CharacterSheetError> {
+        spells: &Spells,
+    ) -> Result<Spells, CharacterSheetError> {
         let entity = self
             .repo
             .update_character_spells(spells, discord_id)
@@ -250,12 +250,8 @@ impl CharacterSheetService {
         spell: &Spell,
     ) -> Result<CharacterSheet, CharacterSheetError> {
         let mut character = self.get_character(discord_id).await?;
-        character.magic.spells.spells.push(spell.clone());
-        character
-            .magic
-            .spells
-            .spells
-            .sort_by_key(|s| s.name.clone());
+        character.magic.spells.push(spell.clone());
+        character.magic.spells.sort_by_key(|s| s.name.clone());
         self.upsert_character(character).await
     }
 
@@ -271,7 +267,6 @@ impl CharacterSheetService {
         // Find and update the spell slot for the given level
         if let Some(spell_slot) = character
             .magic
-            .spells
             .spell_slots
             .iter_mut()
             .find(|s| s.level == level)
@@ -282,13 +277,12 @@ impl CharacterSheetService {
             // If spell slot doesn't exist, create a new one
             character
                 .magic
-                .spells
                 .spell_slots
                 .push(SpellSlot { level, slot, used });
         }
 
         // Sort by level
-        character.magic.spells.spell_slots.sort_by_key(|s| s.level);
+        character.magic.spell_slots.sort_by_key(|s| s.level);
         self.upsert_character(character).await
     }
 
@@ -340,11 +334,11 @@ mod test {
                 combat::{Action, Combat, CombatAction, Defenses, SavingThrows, Sense, Speed},
                 identity::{Characteristics, Identity},
                 inventory::{Inventory, Item},
-                magic::{Magic, Spell, SpellSlot, Spells},
                 meta::Meta,
                 notes::Notes,
                 progression::{ProficianciesTrainings, Progression},
                 skills::{SkillStatus, Skills},
+                spells::{Spell, SpellSlot, Spells},
                 traits::{FeatureTraits, Traits},
             },
             repository::CharacterSheetRepository,
@@ -642,36 +636,34 @@ mod test {
                     passive: 0,
                 },
             },
-            magic: Magic {
-                spells: Spells {
-                    spells: vec![
-                        Spell {
-                            name: "Light".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "Touch".to_owned(),
-                            hit_dc: Some(13),
-                            effect: "Creation".to_owned(),
-                        },
-                        Spell {
-                            name: "Magic Missile".to_owned(),
-                            level: 1,
-                            cast_time: "1 action".to_owned(),
-                            range: "120 ft".to_owned(),
-                            hit_dc: None,
-                            effect: "1d4+1".to_owned(),
-                        },
-                    ],
-                    spell_slots: vec![SpellSlot {
+            magic: Spells {
+                spells: vec![
+                    Spell {
+                        name: "Light".to_owned(),
+                        level: 0,
+                        cast_time: "1 action".to_owned(),
+                        range: "Touch".to_owned(),
+                        hit_dc: Some(13),
+                        effect: "Creation".to_owned(),
+                    },
+                    Spell {
+                        name: "Magic Missile".to_owned(),
                         level: 1,
-                        slot: 3,
-                        used: 0,
-                    }],
-                    ability_type: Ability::Charisma,
-                    ability_modifier: 3,
-                    spell_attack: 5,
-                    save_dc: 13,
-                },
+                        cast_time: "1 action".to_owned(),
+                        range: "120 ft".to_owned(),
+                        hit_dc: None,
+                        effect: "1d4+1".to_owned(),
+                    },
+                ],
+                spell_slots: vec![SpellSlot {
+                    level: 1,
+                    slot: 3,
+                    used: 0,
+                }],
+                ability_type: Ability::Charisma,
+                ability_modifier: 3,
+                spell_attack: 5,
+                save_dc: 13,
             },
             inventory: Inventory {
                 items: vec![

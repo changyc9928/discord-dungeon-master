@@ -1,0 +1,48 @@
+---
+source: src/llm/gemini.rs
+expression: character.magic
+---
+{
+  "spells": [
+    {
+      "name": "光亮术",
+      "level": 0,
+      "castTime": "1个动作",
+      "range": "触及",
+      "hitDc": null,
+      "effect": "使一个物体发出半径20尺的明亮光照，持续1小时。"
+    },
+    {
+      "name": "寒冰射线",
+      "level": 0,
+      "castTime": "1个动作",
+      "range": "60尺",
+      "hitDc": 5,
+      "effect": "发射一道寒冰射线，造成1d8寒冰伤害，并将目标的移动速度降低10尺。"
+    },
+    {
+      "name": "魔法飞弹",
+      "level": 1,
+      "castTime": "1个动作",
+      "range": "120尺",
+      "hitDc": 13,
+      "effect": "创造三枚魔法飞弹，每枚造成1d4+1力场伤害，必定命中。"
+    }
+  ],
+  "spellSlots": [
+    {
+      "level": 1,
+      "slot": 4,
+      "used": 0
+    },
+    {
+      "level": 2,
+      "slot": 2,
+      "used": 0
+    }
+  ],
+  "abilityType": "CHARISMA",
+  "abilityModifier": 3,
+  "spellAttack": 5,
+  "saveDc": 13
+}

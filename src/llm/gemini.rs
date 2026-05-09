@@ -1,77 +1,52 @@
 use std::{
     collections::{HashMap, VecDeque},
-    env, fs,
+    fs,
     sync::Arc,
-    time::Duration,
 };
 
 use async_trait::async_trait;
-use chrono::Utc;
-use gemini_rust::{
-    Content, ContentBuilder, FunctionCall, FunctionDeclaration, FunctionResponse,
-    GenerateContentRequest, GenerationResponse, Part, Role, Tool,
+use rig::{
+    client::{CompletionClient, ProviderClient},
+    completion::{Chat, Completion, CompletionResponse, Prompt},
+    message::{AssistantContent, Message, ToolCall},
+    providers::gemini,
+    tool::ToolDyn,
 };
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 use crate::{
-    character::{
-        entity::{
-            CharacterSheet, abilities_block::AbilitiesBlock, combat::Combat, identity::Identity,
-            inventory::Inventory, magic::Magic, meta::Meta, notes::Notes, progression::Progression,
-            skills::Skills, traits::Traits,
-        },
-        service::CharacterSheetService,
-    },
+    character::service::CharacterSheetService,
     discord_bot::MessageSender,
     llm::{LLM, error::LlmError},
     story::service::StoryService,
     tool::{
         service::ToolService,
         types::{
-            AbilitiesWithDiscordId, AddItemRequest, AddSpellRequest, CombatWithDiscordId,
-            GetCharacterByNameRequest, GetCharacterRequest, GetToolInfo, IdentityWithDiscordId,
-            InventoryWithDiscordId, NewDialogueRequest, NotesWithDiscordId,
-            ProgressionWithDiscordId, RemoveItemRequest, SkillsWithDiscordId, SpellsWithDiscordId,
-            TraitsWithDiscordId, UpdateCharacterLevelRequest, UpdateCurrentHpRequest,
-            UpdateMaxHpRequest, UpdateSpellSlotsRequest,
+            AbilitiesToolCall, AddItemToolCall, AddSpellToolCall, CombatToolCall,
+            GetCharacterByNameToolCall, GetCharacterToolCall, IdentityToolCall, InventoryToolCall,
+            MetaToolCall, NewDialogueToolCall, NotesToolCall, ProgressionToolCall, RemoveCache,
+            RemoveItemToolCall, SkillsToolCall, SpellToolCall, TraitsToolCall,
+            UpdateCharacterLevelToolCall, UpdateCurrentHpToolCall, UpdateMaxHpToolCall,
+            UpdateSpellSlotsToolCall,
         },
     },
 };
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct RemoveCacheRequest {
-    discord_id: String,
-}
+type ToolFactory = Arc<dyn Fn() -> Box<dyn ToolDyn> + Send + Sync>;
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-struct RemoveCacheResponse {
-    cache_removed: bool,
-    discord_id: String,
-}
-
-#[derive(Clone, Debug)]
-enum InternalTool {
-    RemoveCache,
-}
-
-impl InternalTool {
-    fn name(&self) -> &'static str {
-        match self {
-            InternalTool::RemoveCache => "remove_cache",
-        }
-    }
+#[derive(Clone)]
+pub struct Cache {
+    pub history: Vec<Message>,
+    pub prompt: String,
+    pub tools: Vec<ToolFactory>,
 }
 
 pub struct Gemini {
-    client: gemini_rust::Gemini,
-    tool_service: Arc<ToolService>,
+    model: String,
     story_service: Arc<StoryService>,
     character_sheet_service: Arc<CharacterSheetService>,
-    cached_context: HashMap<String, GenerateContentRequest>,
+    tool_service: Arc<ToolService>,
+    cached_context: HashMap<String, Cache>,
     dm_discord_id: String,
     folder_path: String,
     compile_trigger: i64,
@@ -87,219 +62,120 @@ impl Gemini {
         folder_path: String,
         compile_trigger: i64,
     ) -> Result<Self, LlmError> {
-        let api_key = env::var("GEMINI_API_KEY")?;
-        let client = gemini_rust::Gemini::with_model(api_key, model.to_owned())?;
         Ok(Self {
-            client,
-            tool_service,
+            model: model.to_owned(),
             story_service,
             character_sheet_service,
             cached_context: HashMap::new(),
             dm_discord_id,
             folder_path,
             compile_trigger,
+            tool_service,
         })
     }
 
-    /// Extract function calls from content parts into a queue (FIFO)
-    fn extract_function_calls(&self, contents: &[Content]) -> VecDeque<FunctionCall> {
-        let mut function_queue = VecDeque::new();
-
-        for content in contents {
-            if let Some(parts) = &content.parts {
-                for part in parts {
-                    if let Part::FunctionCall { function_call, .. } = part {
-                        function_queue.push_front(function_call.clone());
-                    }
-                    if let Part::FunctionResponse { function_response } = part {
-                        if let Some(last_call) = function_queue.pop_front() {
-                            if last_call.name != function_response.name {
-                                warn!(
-                                    "Warning: Function response name '{}' does not match last function call name '{}'",
-                                    function_response.name, last_call.name
-                                );
-                            }
-                        } else {
-                            warn!(
-                                "Warning: Function response name '{}' has no matching function call",
-                                function_response.name
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        function_queue
-    }
-
-    /// Build a tool with the given function declarations
-    fn build_tool<F, G>(&self) -> Result<Tool, LlmError>
-    where
-        F: JsonSchema + GetToolInfo + Serialize,
-        G: JsonSchema + Serialize,
-    {
-        let tool_info = F::get_tool_name();
-
-        let tool_call = FunctionDeclaration::new(tool_info.0, tool_info.1, None)
-            .with_parameters::<F>()
-            .with_response::<G>();
-
-        // let clear_cache = FunctionDeclaration::new(
-        //     InternalTool::RemoveCache.name(),
-        //     "对话结束后你能使用这个工具来移除上下文的缓存",
-        //     None,
-        // )
-        // .with_parameters::<RemoveCacheRequest>()
-        // .with_response::<RemoveCacheResponse>();
-
-        Ok(Tool::with_functions(vec![tool_call]))
-    }
-
-    fn merge_request(
+    async fn handle_llm_interaction(
         &mut self,
-        ori_request: GenerateContentRequest,
-        discord_user_id: &str,
-    ) -> Result<ContentBuilder, LlmError> {
-        let mut request = self.client.generate_content();
-        let cache = self
-            .cached_context
-            .get(discord_user_id)
-            .cloned()
-            .unwrap_or(self.client.generate_content().build());
-
-        request.contents.extend(cache.contents);
-
-        if let Some(config) = cache.generation_config {
-            request = request.with_generation_config(config);
-        }
-
-        if let Some(config) = cache.tool_config {
-            request = request.with_tool_config(config);
-        }
-
-        if let Some(prompt) = cache.system_instruction {
-            if let Some(part) = prompt.parts {
-                for part in part {
-                    if let Part::Text { text, .. } = part {
-                        request = request.with_system_instruction(text);
-                    }
-                }
-            }
-        }
-
-        if let Some(tool) = cache.tools {
-            for tool in tool {
-                request = request.with_tool(tool);
-            }
-        }
-
-        request.contents.extend(ori_request.contents);
-
-        if let Some(config) = ori_request.generation_config {
-            request = request.with_generation_config(config);
-        }
-
-        if let Some(config) = ori_request.tool_config {
-            request = request.with_tool_config(config);
-        }
-
-        if let Some(prompt) = ori_request.system_instruction {
-            if let Some(part) = prompt.parts {
-                for part in part {
-                    if let Part::Text { text, .. } = part {
-                        request = request.with_system_instruction(text);
-                    }
-                }
-            }
-        }
-
-        if let Some(tool) = ori_request.tools {
-            for tool in tool {
-                request = request.with_tool(tool);
-            }
-        }
-
-        let request_copy = request.clone().build();
-        self.cached_context
-            .insert(discord_user_id.to_owned(), request_copy);
-
-        Ok(request)
-    }
-
-    /// Helper method to add a character with a specific tool
-    async fn add_character_with_tool<F, G>(
-        &mut self,
-        ctx: &dyn MessageSender,
-        discord_user_id: &str,
-        discord_username: &str,
+        discord_id: &str,
         prompt: &str,
-    ) -> Result<String, LlmError>
-    where
-        F: JsonSchema + GetToolInfo + Serialize,
-        G: JsonSchema + Serialize,
-    {
-        let tool = self.build_tool::<F, G>()?;
+        message: &str,
+        tools: Vec<ToolFactory>,
+    ) -> Result<String, LlmError> {
+        let mut memory = self
+            .cached_context
+            .get(discord_id)
+            .cloned()
+            .unwrap_or(Cache {
+                history: vec![],
+                prompt: prompt.to_owned(),
+                tools,
+            });
 
-        let clear_cache = FunctionDeclaration::new(
-            InternalTool::RemoveCache.name(),
-            "对话结束后你能使用这个工具来移除上下文的缓存",
-            None,
-        )
-        .with_parameters::<RemoveCacheRequest>()
-        .with_response::<RemoveCacheResponse>();
-
-        let request = self
-            .client
-            .generate_content()
-            .with_tool(tool.clone())
-            .with_tool(Tool::with_functions(vec![clear_cache]))
-            .with_system_instruction(prompt)
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&memory.prompt)
+            .tools(memory.tools.iter().map(|f| f()).collect())
             .build();
 
-        debug!("Request: {:?}", request);
+        let mut texts = Vec::new();
+        let mut tool_calls = VecDeque::new();
+        let mut should_clear_cache = false;
 
-        self.merge_request(request, discord_user_id)?;
+        // Initial completion
+        let response = agent
+            .completion(message, memory.history.clone())
+            .await?
+            .send()
+            .await?;
 
-        self.conversation_continue(
-            ctx,
-            discord_user_id,
-            discord_username,
-            &format!(
-                "我的Discord ID是{}，你好，请问你需要什么信息？",
-                discord_user_id
-            ),
-        )
-        .await
+        memory.history.push(message.into());
+        memory.history.push(response.choice.clone().into());
+
+        self.collect_response(&response, &mut texts, &mut tool_calls);
+
+        while let Some(tool_call) = tool_calls.pop_front() {
+            if tool_call.function.name == "remove_cache" {
+                should_clear_cache = true;
+                continue;
+            }
+
+            let tool_result_text = match serde_json::to_value(tool_call.function.clone()) {
+                Ok(payload) => match self.tool_service.dispatch(payload).await {
+                    Ok(result) => serde_json::to_string(&result)?,
+                    Err(err) => serde_json::to_string(&err.to_string())?,
+                },
+
+                Err(err) => serde_json::to_string(&err.to_string())?,
+            };
+
+            let message = Message::tool_result(tool_call.id, tool_result_text);
+
+            let followup = agent
+                .completion(message.clone(), memory.history.clone())
+                .await?
+                .send()
+                .await?;
+
+            memory.history.push(message);
+            memory.history.push(followup.choice.clone().into());
+
+            self.collect_response(&followup, &mut texts, &mut tool_calls);
+        }
+
+        if should_clear_cache {
+            self.cached_context.remove(discord_id);
+        } else {
+            self.cached_context.insert(discord_id.to_owned(), memory);
+        }
+
+        Ok(texts
+            .into_iter()
+            .last()
+            .unwrap_or_else(|| "<模型没有给予任何回复>".to_owned()))
     }
 
-    async fn execute_with_retry(
+    fn collect_response<T>(
         &self,
-        request: gemini_rust::generation::builder::ContentBuilder,
-    ) -> Result<GenerationResponse, gemini_rust::client::Error> {
-        let mut attempts = 0;
-        let max_retries = 20;
+        response: &CompletionResponse<T>,
+        texts: &mut Vec<String>,
+        tool_calls: &mut VecDeque<ToolCall>,
+    ) {
+        for item in response.choice.iter() {
+            match item {
+                AssistantContent::Text(text) => {
+                    texts.push(text.text.clone());
+                }
 
-        loop {
-            match request.clone().execute().await {
-                Ok(res) => return Ok(res),
+                AssistantContent::ToolCall(call) => {
+                    tool_calls.push_back(call.clone());
+                }
 
-                Err(e) => {
-                    match &e {
-                        gemini_rust::client::Error::BadResponse { code, .. } if *code == 503 => {
-                            attempts += 1;
+                AssistantContent::Reasoning(reasoning) => {
+                    info!("Reasoning: {reasoning:?}");
+                }
 
-                            if attempts > max_retries {
-                                return Err(e);
-                            }
-
-                            // simple backoff (can improve later)
-                            let delay = Duration::from_secs(2_u64.pow(attempts));
-                            sleep(delay).await;
-                        }
-
-                        _ => return Err(e), // propagate all other errors immediately
-                    }
+                AssistantContent::Image(image) => {
+                    info!("Image sent: {image:?}");
                 }
             }
         }
@@ -310,358 +186,404 @@ impl Gemini {
 impl LLM for Gemini {
     async fn conversation_continue(
         &mut self,
-        ctx: &dyn MessageSender,
+        _ctx: &dyn MessageSender,
         discord_user_id: &str,
-        discord_username: &str,
+        _discord_username: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
-        let mut remove_cache_flag = None;
-        info!(discord_user_id = %discord_user_id, "Starting conversation_continue");
-
         if !self.cached_context.contains_key(discord_user_id) {
-            return Err(LlmError::CacheError(format!(
-                "No cached context for Discord user ID: {}",
-                discord_user_id
-            )));
+            return Ok("对话上下文不存在，请使用slash command来开启你需要的功能对话".to_owned());
         }
-
-        let builder = self
-            .client
-            .generate_content()
-            .with_user_message(discord_channel_message)
-            .build();
-
-        let cached_content = self.merge_request(builder, discord_user_id)?.build();
-
-        debug!("First cache: {:?}", cached_content);
-
-        loop {
-            let request = self.client.generate_content().build();
-            let request = self.merge_request(request, discord_user_id)?;
-
-            debug!("Full request: {:?}", request.clone().build());
-
-            let response = self.execute_with_retry(request).await?;
-
-            let contents = response
-                .candidates
-                .clone()
-                .into_iter()
-                .map(|c| c.content)
-                .collect::<Vec<_>>();
-
-            debug!("Responded content: {:?}", contents);
-
-            let function_queue = self.extract_function_calls(&contents);
-
-            let mut new_cache = self.client.generate_content();
-            new_cache.contents.extend(contents);
-            self.merge_request(new_cache.build(), discord_user_id)?;
-
-            if function_queue.is_empty() {
-                if let Some(id) = remove_cache_flag {
-                    self.cached_context.remove(&id);
-                }
-                return Ok(response.text());
-            }
-
-            let response_text = response.text();
-            if !response_text.is_empty() {
-                let response = ctx.send(response_text).await;
-                if let Err(e) = response {
-                    let response = self.client.generate_content();
-                    let response = response.with_user_message(e.to_string());
-                    self.merge_request(response.build(), discord_user_id)?;
-                }
-            }
-
-            let mut function_response = self.client.generate_content();
-
-            for function_call in function_queue {
-                info!(
-                    discord_user_id = %discord_user_id,
-                    tool_name = %function_call.name,
-                    "Function call received"
-                );
-
-                debug!(
-                    tool_name = %function_call.name,
-                    args = %serde_json::to_string_pretty(&function_call.args).unwrap_or_default(),
-                    "Tool call details"
-                );
-
-                let res = if function_call.name == InternalTool::RemoveCache.name() {
-                    debug!(discord_user_id = %discord_user_id, "Handling remove_cache");
-                    let args: RemoveCacheRequest =
-                        serde_json::from_value(function_call.args.clone())?;
-                    remove_cache_flag = Some(args.discord_id);
-                    serde_json::to_value(RemoveCacheResponse {
-                        cache_removed: true,
-                        discord_id: discord_user_id.to_owned(),
-                    })?
-                } else if function_call.name == NewDialogueRequest::get_tool_name().0 {
-                    debug!(
-                        discord_user_id = %discord_user_id,
-                        tool_name = %function_call.name,
-                        "Storing new dialogue"
-                    );
-
-                    let character = self
-                        .character_sheet_service
-                        .get_character(
-                            discord_user_id
-                                .split("_")
-                                .collect::<Vec<_>>()
-                                .first()
-                                .ok_or_else(|| {
-                                    LlmError::MissingContent("discord_user_id".to_string())
-                                })?,
-                        )
-                        .await;
-                    let character_name = match character {
-                        Ok(character) => character.identity.character_name,
-                        _ => {
-                            let split_id = discord_user_id.split("_").collect::<Vec<_>>();
-                            let discord_id = split_id.first().ok_or_else(|| {
-                                LlmError::MissingContent("discord_user_id".to_string())
-                            })?;
-                            if *discord_id == self.dm_discord_id {
-                                "Dungeon Master".to_string()
-                            } else {
-                                format!("Unknown Adventurer - {}", discord_username)
-                            }
-                        }
-                    };
-                    serde_json::to_value(
-                        self.story_service
-                            .insert_new_dialogue(
-                                discord_channel_message
-                                    .split_once(":")
-                                    .ok_or_else(|| {
-                                        LlmError::MissingContent(
-                                            "discord_channel_message".to_string(),
-                                        )
-                                    })?
-                                    .1,
-                                discord_username,
-                                &character_name,
-                                discord_user_id
-                                    .split("_")
-                                    .collect::<Vec<_>>()
-                                    .first()
-                                    .ok_or_else(|| {
-                                        LlmError::MissingContent("discord_user_id".to_string())
-                                    })?,
-                            )
-                            .await?,
-                    )?
-                } else {
-                    debug!(
-                        discord_user_id = %discord_user_id,
-                        tool_name = %function_call.name,
-                        "Dispatching tool to service"
-                    );
-
-                    let response = self
-                        .tool_service
-                        .dispatch(serde_json::to_value(&function_call)?)
-                        .await;
-
-                    match response {
-                        Ok(r) => r,
-                        Err(e) => {
-                            tracing::error!(
-                                discord_user_id = %discord_user_id,
-                                tool_name = %function_call.name,
-                                error = %e,
-                                "Error executing tool"
-                            );
-                            serde_json::to_value(json!({
-                                "result": "Error calling tool",
-                                "error": e.to_string()
-                            }))?
-                        }
-                    }
-                };
-
-                let content = Content::function_response(FunctionResponse::from_schema(
-                    function_call.name.clone(),
-                    res,
-                )?)
-                .with_role(Role::User);
-
-                function_response.contents.push(content);
-            }
-
-            self.merge_request(function_response.build(), discord_user_id)?;
-        }
+        self.handle_llm_interaction(discord_user_id, "", discord_channel_message, vec![])
+            .await
     }
 
     async fn add_character_spells(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_spells.txt", self.folder_path))?;
-        self.add_character_with_tool::<SpellsWithDiscordId, Magic>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(SpellToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
+
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
+
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
+            .await
     }
 
     async fn add_character_abilities(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_abilities.txt", self.folder_path))?;
-        self.add_character_with_tool::<AbilitiesWithDiscordId, AbilitiesBlock>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(AbilitiesToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_skills(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_skills.txt", self.folder_path))?;
-        self.add_character_with_tool::<SkillsWithDiscordId, Skills>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(SkillsToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_traits(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_traits.txt", self.folder_path))?;
-        self.add_character_with_tool::<TraitsWithDiscordId, Traits>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(TraitsToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_notes(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_notes.txt", self.folder_path))?;
-        self.add_character_with_tool::<NotesWithDiscordId, Notes>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(NotesToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_meta(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_meta.txt", self.folder_path))?;
-        self.add_character_with_tool::<Meta, Meta>(ctx, discord_username, discord_user_id, &prompt)
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(MetaToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
             .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_identity(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_identity.txt", self.folder_path))?;
-        self.add_character_with_tool::<IdentityWithDiscordId, Identity>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(IdentityToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_progression(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!(
             "{}/add_character_progression.txt",
             self.folder_path
         ))?;
-        self.add_character_with_tool::<ProgressionWithDiscordId, Progression>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(ProgressionToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_combat(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt = fs::read_to_string(format!("{}/add_character_combat.txt", self.folder_path))?;
-        self.add_character_with_tool::<CombatWithDiscordId, Combat>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(CombatToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn add_character_inventory(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
         let prompt =
             fs::read_to_string(format!("{}/add_character_inventory.txt", self.folder_path))?;
-        self.add_character_with_tool::<InventoryWithDiscordId, Inventory>(
-            ctx,
-            discord_username,
-            discord_user_id,
-            &prompt,
-        )
-        .await
+
+        let memory: Vec<Message> = vec![];
+
+        let character_sheet_service = self.character_sheet_service.clone();
+
+        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
+            Box::new(InventoryToolCall {
+                character_sheet_service: character_sheet_service.clone(),
+            })
+        })];
+
+        let agent = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(tools.iter().map(|f| f()).collect())
+            .build();
+
+        self.cached_context.insert(
+            discord_user_id.to_owned(),
+            Cache {
+                history: memory.clone(),
+                prompt,
+                tools,
+            },
+        );
+
+        agent
+            .chat("你好，请问你要什么信息？", memory)
+            .await
+            .map_err(LlmError::from)
     }
 
     async fn request_to_llm(
         &mut self,
-        ctx: &dyn MessageSender,
-        discord_username: &str,
+        _ctx: &dyn MessageSender,
+        _discord_username: &str,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
@@ -672,7 +594,6 @@ impl LLM for Gemini {
             discord_user_id, discord_channel_message
         );
 
-        let discord_user_id = format!("{}_{}", discord_user_id, Utc::now().timestamp());
         let summary = self.story_service.get_latest_story().await?;
         let dialogues = self.story_service.get_latest_dialogues().await?;
         let mut dialogues = dialogues
@@ -713,52 +634,48 @@ DM的discord ID为{}
             prompt, self.dm_discord_id
         );
 
-        let tool = vec![
-            self.build_tool::<GetCharacterRequest, CharacterSheet>()?,
-            self.build_tool::<GetCharacterByNameRequest, CharacterSheet>()?,
-            self.build_tool::<AddItemRequest, CharacterSheet>()?,
-            self.build_tool::<RemoveItemRequest, CharacterSheet>()?,
-            self.build_tool::<AddSpellRequest, CharacterSheet>()?,
-            self.build_tool::<UpdateSpellSlotsRequest, CharacterSheet>()?,
-            self.build_tool::<UpdateCurrentHpRequest, CharacterSheet>()?,
-            self.build_tool::<UpdateMaxHpRequest, CharacterSheet>()?,
-            self.build_tool::<UpdateCharacterLevelRequest, CharacterSheet>()?,
-        ];
+        let client = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tools(vec![
+                Box::new(GetCharacterToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(GetCharacterByNameToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(AddItemToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(RemoveItemToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(AddSpellToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(UpdateSpellSlotsToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(UpdateCurrentHpToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(UpdateMaxHpToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+                Box::new(UpdateCharacterLevelToolCall {
+                    character_sheet_service: self.character_sheet_service.clone(),
+                }),
+            ])
+            .build();
 
-        // let clear_cache = FunctionDeclaration::new(
-        //     InternalTool::RemoveCache.name(),
-        //     "对话结束后你能使用这个工具来移除上下文的缓存",
-        //     None,
-        // )
-        // .with_parameters::<RemoveCacheRequest>()
-        // .with_response::<RemoveCacheResponse>();
-
-        let mut request = self.client.generate_content();
-
-        for tool in tool {
-            request = request.with_tool(tool);
-        }
-
-        // request = request.with_tool(Tool::with_functions(vec![clear_cache]));
-
-        let request = request.with_system_instruction(prompt).build();
-
-        debug!("Request: {:?}", request);
-
-        self.merge_request(request, &discord_user_id)?;
-
-        let reply = self
-            .conversation_continue(ctx, &discord_user_id, discord_username, &message)
-            .await?;
-
-        self.cached_context.remove(&discord_user_id);
+        let reply = client.prompt(message).await?;
 
         Ok(reply)
     }
 
     async fn store_new_dialogue(
         &mut self,
-        ctx: &dyn MessageSender,
+        _ctx: &dyn MessageSender,
         message: &str,
         author_id: &str,
         author_name: &str,
@@ -772,50 +689,35 @@ DM的discord ID为{}",
             self.dm_discord_id
         );
 
-        let author_id_with_timestamp = format!("{}_{}", author_id, Utc::now().timestamp());
-
-        let tool = self.build_tool::<NewDialogueRequest, ()>()?;
-
-        let request = self
-            .client
-            .generate_content()
-            .with_system_instruction(prompt)
-            .with_tool(tool)
+        let client = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .tool(NewDialogueToolCall {
+                character_sheet_service: self.character_sheet_service.clone(),
+                story_service: self.story_service.clone(),
+                dialogue: message.to_owned(),
+                author_name: author_name.to_owned(),
+            })
             .build();
 
-        self.merge_request(request, &author_id_with_timestamp)?;
-
-        self.conversation_continue(
-            ctx,
-            &author_id_with_timestamp,
-            author_name,
-            &format!(
+        let reply = client
+            .prompt(format!(
                 "用户Discord ID {}; 用户名 {}: {}",
                 author_id, author_name, message
-            ),
-        )
-        .await?;
+            ))
+            .await?;
 
-        self.cached_context.remove(&author_id_with_timestamp);
+        info!(reply = %reply, author_id = %author_id, author_name = %author_name, "Stored new dialogue through LLM tool");
 
         Ok(())
     }
 
-    async fn new_summary(&mut self, ctx: &dyn MessageSender) -> Result<(), LlmError> {
-        let user_id = format!("summary_{}", Utc::now().timestamp());
+    async fn new_summary(&mut self, _ctx: &dyn MessageSender) -> Result<(), LlmError> {
         let dialogues = self.story_service.get_latest_dialogues().await?;
         if dialogues.len() < self.compile_trigger as usize {
             return Ok(());
         }
         let prompt = fs::read_to_string(format!("{}/new_summary.txt", self.folder_path))?;
-
-        let request = self
-            .client
-            .generate_content()
-            .with_system_instruction(prompt)
-            .build();
-
-        self.merge_request(request, &user_id)?;
 
         let story = self.story_service.get_latest_story().await?;
 
@@ -847,15 +749,16 @@ DM的discord ID为{}",
 请基于以上信息，生成一段更新后的完整剧情总结。"
         );
 
-        let res = self
-            .conversation_continue(ctx, &user_id, "system", &message)
-            .await?;
+        let client = gemini::Client::from_env()?
+            .agent(self.model.clone())
+            .preamble(&prompt)
+            .build();
+
+        let res = client.prompt(message).await?;
 
         self.story_service.insert_new_story(&res).await?;
 
         self.story_service.clear_dialogue_table().await?;
-
-        self.cached_context.remove(&user_id);
 
         Ok(())
     }
@@ -878,11 +781,11 @@ mod test {
                 combat::{Action, Combat, CombatAction, Defenses, SavingThrows, Sense, Speed},
                 identity::{Characteristics, Identity},
                 inventory::{Inventory, Item},
-                magic::{Magic, Spell, SpellSlot, Spells},
                 meta::Meta,
                 notes::Notes,
                 progression::{ProficianciesTrainings, Progression},
                 skills::{SkillStatus, Skills},
+                spells::{Spell, SpellSlot, Spells},
                 traits::{FeatureTraits, LockedFeatureTraits, Traits},
             },
             repository::CharacterSheetRepository,
@@ -947,23 +850,21 @@ mod test {
             dialogue_repository,
             compile_trigger: 10,
         });
+        let tool_service = Arc::new(ToolService::new(
+            character_sheet_service.clone(),
+            story_service.clone(),
+        ));
 
         Ok((
             Gemini {
-                client: gemini_rust::Gemini::with_model(
-                    "mock_key",
-                    "models/gemini-3.1-flash-lite-preview".to_owned(),
-                )?,
-                tool_service: Arc::new(ToolService::new(
-                    Arc::clone(&character_sheet_service),
-                    Arc::clone(&story_service),
-                )),
+                model: "gemini-3.1-flash-lite-preview".to_owned(),
                 story_service,
                 character_sheet_service: character_sheet_service.clone(),
                 cached_context: HashMap::new(),
                 dm_discord_id: "1483098634601107476".to_owned(),
                 folder_path: "./prompts".to_string(),
                 compile_trigger: 4,
+                tool_service,
             },
             pool,
             db_name,
@@ -1258,8 +1159,7 @@ mod test {
                     passive: 0,
                 },
             },
-            magic: Magic {
-                spells: Spells {
+            magic: Spells {
                     spells: vec![
                         Spell {
                             name: "Light".to_owned(),
@@ -1335,7 +1235,6 @@ mod test {
                     ability_modifier: 3,
                     spell_attack: 5,
                     save_dc: 13,
-                },
             },
             inventory: Inventory {
                 items: vec![
@@ -1757,6 +1656,46 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
     }
 
     #[tokio::test]
+    async fn test_add_spells() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+
+        let res = gemini_service
+            .add_character_spells(&message_sender, "anyTHING", "1483098634601107486")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                "1483098634601107486",
+                "anyTHING",
+                "我目前会光亮术、寒冰射线和魔法飞弹，没有其他的了，用的魅力值作为判定属性，魅力加值3，熟练加值2，DC 13，一环法术位4个二环法术位2个，无消耗",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, "1483098634601107486", "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service
+            .get_character("1483098634601107486")
+            .await?;
+
+        assert_json_snapshot!(character.magic);
+
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_judge() -> Result<(), Box<dyn std::error::Error>> {
         let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
         let message_sender = MockMessageSender;
@@ -1964,7 +1903,6 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
         let (mut gemini_service, pool, _, _) = service_setup().await?;
         let message_sender = MockMessageSender;
 
-        // No dialogues, should not generate summary
         gemini_service.new_summary(&message_sender).await?;
 
         let response: Vec<StoryEntity> = sqlx::query_as("SELECT * FROM story")
@@ -1972,8 +1910,6 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
             .await?;
 
         assert_eq!(response.len(), 0);
-
-        // Insert dialogues to trigger summary generation
 
         sqlx::query(
                 "INSERT INTO public.dialogues (dialogue, author_name, author_character, author_discord_id, updated_at) VALUES (' 系统提示：角色创建完成。
@@ -2070,14 +2006,13 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
         .bind(Combat::default())
         .bind(AbilitiesBlock::default())
         .bind(Skills::default())
-        .bind(Magic::default())
+        .bind(Spells::default())
         .bind(Inventory::default())
         .bind(Traits::default())
         .bind(Notes::default())
         .fetch_one(&pool)
         .await?;
 
-        // Dummy dialogue, should not be stored due to empty content
         gemini_service
             .store_new_dialogue(&message_sender, "", "", "")
             .await?;
