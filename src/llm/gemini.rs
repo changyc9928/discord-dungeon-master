@@ -7,7 +7,7 @@ use std::{
 use async_trait::async_trait;
 use rig::{
     client::{CompletionClient, ProviderClient},
-    completion::{Chat, Completion, CompletionResponse, Prompt},
+    completion::{Completion, CompletionResponse, Prompt},
     message::{AssistantContent, Message, ToolCall},
     providers::gemini,
     tool::ToolDyn,
@@ -186,11 +186,12 @@ impl Gemini {
 impl LLM for Gemini {
     async fn conversation_continue(
         &mut self,
-        _ctx: &dyn MessageSender,
+        ctx: &dyn MessageSender,
         discord_user_id: &str,
-        _discord_username: &str,
+        discord_username: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         if !self.cached_context.contains_key(discord_user_id) {
             return Ok("对话上下文不存在，请使用slash command来开启你需要的功能对话".to_owned());
         }
@@ -200,10 +201,11 @@ impl LLM for Gemini {
 
     async fn add_character_spells(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_spells.txt", self.folder_path))?;
 
         let character_sheet_service = self.character_sheet_service.clone();
@@ -225,368 +227,252 @@ impl LLM for Gemini {
 
     async fn add_character_abilities(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt =
             fs::read_to_string(format!("{}/add_character_abilities.txt", self.folder_path))?;
 
-        let memory: Vec<Message> = vec![];
-
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(AbilitiesToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(AbilitiesToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_skills(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_skills.txt", self.folder_path))?;
-
-        let memory: Vec<Message> = vec![];
 
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(SkillsToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(SkillsToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_traits(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_traits.txt", self.folder_path))?;
-
-        let memory: Vec<Message> = vec![];
 
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(TraitsToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(TraitsToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_notes(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_notes.txt", self.folder_path))?;
-
-        let memory: Vec<Message> = vec![];
 
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(NotesToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(NotesToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_meta(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_meta.txt", self.folder_path))?;
-
-        let memory: Vec<Message> = vec![];
 
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(MetaToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(MetaToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_identity(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt =
             fs::read_to_string(format!("{}/add_character_identity.txt", self.folder_path))?;
 
-        let memory: Vec<Message> = vec![];
-
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(IdentityToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(IdentityToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_progression(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!(
             "{}/add_character_progression.txt",
             self.folder_path
         ))?;
 
-        let memory: Vec<Message> = vec![];
-
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(ProgressionToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(ProgressionToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_combat(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_combat.txt", self.folder_path))?;
-
-        let memory: Vec<Message> = vec![];
 
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(CombatToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(CombatToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn add_character_inventory(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt =
             fs::read_to_string(format!("{}/add_character_inventory.txt", self.folder_path))?;
 
-        let memory: Vec<Message> = vec![];
-
         let character_sheet_service = self.character_sheet_service.clone();
 
-        let tools: Vec<ToolFactory> = vec![Arc::new(move || {
-            Box::new(InventoryToolCall {
-                character_sheet_service: character_sheet_service.clone(),
-            })
-        })];
+        let tools: Vec<ToolFactory> = vec![
+            Arc::new(move || {
+                Box::new(InventoryToolCall {
+                    character_sheet_service: character_sheet_service.clone(),
+                })
+            }),
+            Arc::new(move || Box::new(RemoveCache)),
+        ];
 
-        let agent = gemini::Client::from_env()?
-            .agent(self.model.clone())
-            .preamble(&prompt)
-            .tools(tools.iter().map(|f| f()).collect())
-            .build();
+        let message = format!("你好，我的Discord ID是{discord_user_id}，请问你要什么信息？");
 
-        self.cached_context.insert(
-            discord_user_id.to_owned(),
-            Cache {
-                history: memory.clone(),
-                prompt,
-                tools,
-            },
-        );
-
-        agent
-            .chat("你好，请问你要什么信息？", memory)
+        self.handle_llm_interaction(discord_user_id, &prompt, &message, tools)
             .await
-            .map_err(LlmError::from)
     }
 
     async fn request_to_llm(
         &mut self,
-        _ctx: &dyn MessageSender,
-        _discord_username: &str,
+        ctx: &dyn MessageSender,
+        discord_username: &str,
         discord_user_id: &str,
         discord_channel_message: &str,
     ) -> Result<String, LlmError> {
+        let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/main.txt", self.folder_path))?;
 
         let message = format!(
@@ -675,11 +561,12 @@ DM的discord ID为{}
 
     async fn store_new_dialogue(
         &mut self,
-        _ctx: &dyn MessageSender,
+        ctx: &dyn MessageSender,
         message: &str,
         author_id: &str,
         author_name: &str,
     ) -> Result<(), LlmError> {
+        let _ = ctx;
         let prompt = fs::read_to_string(format!("{}/new_dialogue.txt", self.folder_path))?;
 
         let prompt = format!(
@@ -712,7 +599,8 @@ DM的discord ID为{}",
         Ok(())
     }
 
-    async fn new_summary(&mut self, _ctx: &dyn MessageSender) -> Result<(), LlmError> {
+    async fn new_summary(&mut self, ctx: &dyn MessageSender) -> Result<(), LlmError> {
+        let _ = ctx;
         let dialogues = self.story_service.get_latest_dialogues().await?;
         if dialogues.len() < self.compile_trigger as usize {
             return Ok(());
