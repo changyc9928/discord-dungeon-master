@@ -202,8 +202,8 @@ impl LLM for Gemini {
     async fn add_character_spells(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_spells.txt", self.folder_path))?;
@@ -228,8 +228,8 @@ impl LLM for Gemini {
     async fn add_character_abilities(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt =
@@ -255,8 +255,8 @@ impl LLM for Gemini {
     async fn add_character_skills(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_skills.txt", self.folder_path))?;
@@ -281,8 +281,8 @@ impl LLM for Gemini {
     async fn add_character_traits(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_traits.txt", self.folder_path))?;
@@ -307,8 +307,8 @@ impl LLM for Gemini {
     async fn add_character_notes(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_notes.txt", self.folder_path))?;
@@ -333,8 +333,8 @@ impl LLM for Gemini {
     async fn add_character_meta(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_meta.txt", self.folder_path))?;
@@ -359,8 +359,8 @@ impl LLM for Gemini {
     async fn add_character_identity(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt =
@@ -386,8 +386,8 @@ impl LLM for Gemini {
     async fn add_character_progression(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!(
@@ -415,8 +415,8 @@ impl LLM for Gemini {
     async fn add_character_combat(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt = fs::read_to_string(format!("{}/add_character_combat.txt", self.folder_path))?;
@@ -441,8 +441,8 @@ impl LLM for Gemini {
     async fn add_character_inventory(
         &mut self,
         ctx: &dyn MessageSender,
-        discord_username: &str,
         discord_user_id: &str,
+        discord_username: &str,
     ) -> Result<String, LlmError> {
         let _ = (ctx, discord_username);
         let prompt =
@@ -1550,7 +1550,7 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
         let message_sender = MockMessageSender;
 
         let res = gemini_service
-            .add_character_spells(&message_sender, "anyTHING", "1483098634601107486")
+            .add_character_spells(&message_sender, "1483098634601107486", "anyTHING")
             .await?;
 
         println!("Response: {res}");
