@@ -12,6 +12,9 @@ services:
     build:
       context: .
       target: final
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./config/config.yaml:/app/config.yaml
       - ./migrations:/app/db/migrations
@@ -25,7 +28,7 @@ services:
     ports:
       - 30000:30000
   db:
-    image: postgres
+    image: postgres:17
     restart: always
     user: postgres
     environment:
@@ -76,4 +79,3 @@ volumes:
 # secrets:
 #   db-password:
 #     file: db/password.txt
-
