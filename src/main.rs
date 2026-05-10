@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
     config::{AiDmConfig, ServiceConfig},
-    llm::gemini::Gemini,
+    llm::openai::OpenAi,
     pg_pool::{TestPgPool, TestPgPoolConfig},
     story::{
         repository::{DialogueRepository, StoryRepository},
@@ -60,7 +60,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         story_service: Arc::clone(&story_service),
     });
 
-    let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
+    // let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
+    //     &service_config.config.gemini_model,
+    //     tool_service,
+    //     story_service,
+    //     Arc::clone(&character_sheet_service),
+    //     service_config.config.dm_id.clone(),
+    //     service_config.config.promopts_folder_path,
+    //     service_config.config.compile_trigger,
+    // )?));
+    let openai: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(OpenAi::new(
         &service_config.config.gemini_model,
         tool_service,
         story_service,
@@ -68,6 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         service_config.config.dm_id.clone(),
         service_config.config.promopts_folder_path,
         service_config.config.compile_trigger,
+        service_config.config.base_url.unwrap(),
     )?));
 
     let discord_token = service_config
@@ -79,7 +89,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     discord_bot::handler::start_bot(
         &discord_token,
-        gemini,
+        openai,
         service_config.config.channel_id.clone(),
         service_config.config.self_discord_id.clone(),
         service_config.config.dm_id.clone(),

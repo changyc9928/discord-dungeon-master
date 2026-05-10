@@ -4,6 +4,7 @@ use crate::{discord_bot::MessageSender, llm::error::LlmError};
 
 pub mod error;
 pub mod gemini;
+pub mod openai;
 
 #[async_trait]
 pub trait LLM: Send + Sync {

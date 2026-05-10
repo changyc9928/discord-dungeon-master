@@ -35,4 +35,6 @@ pub enum LlmError {
     PromptError(#[from] PromptError),
     #[error(transparent)]
     CompletionError(#[from] CompletionError),
+    #[error(transparent)]
+    HttpError(#[from] rig::http_client::Error),
 }

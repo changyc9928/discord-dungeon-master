@@ -1,0 +1,48 @@
+---
+source: src/llm/openai.rs
+expression: character.magic
+---
+{
+  "spells": [
+    {
+      "name": "光亮术",
+      "level": 0,
+      "castTime": "1动作",
+      "range": "触及",
+      "hitDc": null,
+      "effect": "发出一束耀眼的光芒，照亮目标物体或生物，目标处于明亮光照下，并从该点再扩散出较弱光照。"
+    },
+    {
+      "name": "寒冰射线",
+      "level": 0,
+      "castTime": "1动作",
+      "range": "60尺",
+      "hitDc": 5,
+      "effect": "你朝目标发射一束寒冷能量。命中时，目标受到寒冷伤害，并且其速度在其下一回合开始前降低。"
+    },
+    {
+      "name": "魔法飞弹",
+      "level": 1,
+      "castTime": "1动作",
+      "range": "120尺",
+      "hitDc": null,
+      "effect": "你向目标发射三道发光的魔法箭。每道飞弹都命中目标，造成力场伤害。"
+    }
+  ],
+  "spellSlots": [
+    {
+      "level": 1,
+      "slot": 4,
+      "used": 0
+    },
+    {
+      "level": 2,
+      "slot": 2,
+      "used": 0
+    }
+  ],
+  "abilityType": "CHARISMA",
+  "abilityModifier": 3,
+  "spellAttack": 5,
+  "saveDc": 13
+}

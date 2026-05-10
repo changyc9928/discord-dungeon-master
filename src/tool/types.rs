@@ -988,12 +988,17 @@ impl Tool for UpdateCharacterLevelToolCall {
 
 pub struct RemoveCache;
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct RemoveCacheRequest {
+    pub remove: bool,
+}
+
 impl Tool for RemoveCache {
     const NAME: &'static str = "remove_cache";
 
     type Error = LlmError;
 
-    type Args = ();
+    type Args = RemoveCacheRequest;
 
     type Output = ();
 

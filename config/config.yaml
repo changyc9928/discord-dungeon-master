@@ -11,7 +11,9 @@ database:
   username: postgres
   password: postgres
 
-gemini-model: "models/gemini-3.1-flash-lite-preview"
+base-url: "https://api.moxiuren.org/v1/"
+
+gemini-model: "gpt-5.4-mini"
 # channel-id: "1483049792648249374"
 # channel-id: "1483099164576317631"
 channel-id: "1492778092572446921"
