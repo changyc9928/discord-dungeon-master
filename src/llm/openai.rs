@@ -6,10 +6,10 @@ use std::{
 
 use async_trait::async_trait;
 use rig::{
-    client::{CompletionClient, ProviderClient},
+    client::CompletionClient,
     completion::{Completion, CompletionResponse, Prompt},
     message::{AssistantContent, Message, ToolCall},
-    providers::{gemini, openai},
+    providers::openai,
     tool::ToolDyn,
 };
 use tracing::info;
@@ -533,7 +533,13 @@ DM的discord ID为{}
             prompt, self.dm_discord_id
         );
 
-        let client = gemini::Client::from_env()?
+        let builder = openai::Client::builder();
+        let api_key = std::env::var("OPENAI_KEY")?;
+
+        let client = builder
+            .base_url(self.base_url.clone())
+            .api_key(api_key)
+            .build()?
             .agent(self.model.clone())
             .preamble(&prompt)
             .tools(vec![
@@ -589,7 +595,13 @@ DM的discord ID为{}",
             self.dm_discord_id
         );
 
-        let client = gemini::Client::from_env()?
+        let builder = openai::Client::builder();
+        let api_key = std::env::var("OPENAI_KEY")?;
+
+        let client = builder
+            .base_url(self.base_url.clone())
+            .api_key(api_key)
+            .build()?
             .agent(self.model.clone())
             .preamble(&prompt)
             .tool(NewDialogueToolCall {
@@ -650,7 +662,13 @@ DM的discord ID为{}",
 请基于以上信息，生成一段更新后的完整剧情总结。"
         );
 
-        let client = gemini::Client::from_env()?
+        let builder = openai::Client::builder();
+        let api_key = std::env::var("OPENAI_KEY")?;
+
+        let client = builder
+            .base_url(self.base_url.clone())
+            .api_key(api_key)
+            .build()?
             .agent(self.model.clone())
             .preamble(&prompt)
             .build();

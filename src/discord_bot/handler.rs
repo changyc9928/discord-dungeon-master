@@ -3,7 +3,7 @@ use poise::serenity_prelude as serenity;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::{Duration, interval};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::character::service::CharacterSheetService;
 use crate::discord_bot::DiscordSender;
@@ -96,8 +96,10 @@ async fn event_handler(
             tracing::error!("Failed to send message: {}", e);
         }
     } else if author_id == data.dm_discord_id {
+        debug!("Buffering DM messages");
         let mut messages = data.buffered_messages.lock().await;
         messages.push(buffered_message);
+        debug!("Pushed message");
     } else {
         if let Err(e) = data
             .llm
@@ -212,7 +214,12 @@ pub async fn start_bot(
 }
 
 async fn should_flush_buffer(data: &Data) -> Result<bool, DiscordBotError> {
-    let messages = data.buffered_messages.lock().await;
+    debug!("Checking if we should flush buffer");
+    let messages = {
+        let guard = data.buffered_messages.lock().await;
+        guard.clone()
+    }; // lock released immediately
+    debug!("Messages: {messages:?}");
     if messages.is_empty() {
         return Ok(false);
     }
@@ -229,10 +236,13 @@ async fn should_flush_buffer(data: &Data) -> Result<bool, DiscordBotError> {
     let now = chrono::Utc::now();
     let elapsed = now.signed_duration_since(most_recent_message.start_time);
 
+    debug!("Messaged elapsed: {elapsed}");
+
     Ok(elapsed.num_seconds() >= data.buffered_message_expiry_seconds as i64)
 }
 
 async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
+    debug!("Start to flush buffer");
     let messages = {
         let mut messages = data.buffered_messages.lock().await;
         if messages.is_empty() {
