@@ -5,7 +5,7 @@ use strum::Display;
 
 use crate::character::entity::{
     abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
-    spells::Spells, meta::Meta, notes::Notes, progression::Progression, skills::Skills,
+    meta::Meta, notes::Notes, progression::Progression, skills::Skills, spells::Spells,
     traits::Traits,
 };
 
@@ -13,11 +13,11 @@ pub mod abilities_block;
 pub mod combat;
 pub mod identity;
 pub mod inventory;
-pub mod spells;
 pub mod meta;
 pub mod notes;
 pub mod progression;
 pub mod skills;
+pub mod spells;
 pub mod traits;
 
 #[derive(

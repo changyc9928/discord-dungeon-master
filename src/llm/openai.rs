@@ -1,18 +1,21 @@
 use std::{
     collections::{HashMap, VecDeque},
     fs,
+    future::Future,
     sync::Arc,
+    time::Duration,
 };
 
 use async_trait::async_trait;
 use rig::{
     client::CompletionClient,
-    completion::{Completion, CompletionResponse, Prompt},
+    completion::{Completion, CompletionError, CompletionResponse, Prompt, PromptError},
     message::{AssistantContent, Message, ToolCall},
     providers::openai,
     tool::ToolDyn,
 };
-use tracing::info;
+use tokio::time::sleep;
+use tracing::{info, warn};
 
 use crate::{
     character::service::CharacterSheetService,
@@ -111,11 +114,14 @@ impl OpenAi {
         let mut should_clear_cache = false;
 
         // Initial completion
-        let response = agent
-            .completion(message, memory.history.clone())
-            .await?
-            .send()
-            .await?;
+        let response = Self::completion_with_retry(|| async {
+            agent
+                .completion(message, memory.history.clone())
+                .await?
+                .send()
+                .await
+        })
+        .await?;
 
         memory.history.push(message.into());
         memory.history.push(response.choice.clone().into());
@@ -143,11 +149,14 @@ impl OpenAi {
                 tool_result_text,
             );
 
-            let followup = agent
-                .completion(message.clone(), memory.history.clone())
-                .await?
-                .send()
-                .await?;
+            let followup = Self::completion_with_retry(|| async {
+                agent
+                    .completion(message.clone(), memory.history.clone())
+                    .await?
+                    .send()
+                    .await
+            })
+            .await?;
 
             memory.history.push(message);
             memory.history.push(followup.choice.clone().into());
@@ -165,6 +174,80 @@ impl OpenAi {
             .into_iter()
             .last()
             .unwrap_or_else(|| "<模型没有给予任何回复>".to_owned()))
+    }
+
+    async fn completion_with_retry<T, F, Fut>(
+        mut request: F,
+    ) -> Result<CompletionResponse<T>, CompletionError>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<CompletionResponse<T>, CompletionError>>,
+    {
+        let mut attempt = 0;
+        loop {
+            let result = request().await;
+
+            match result {
+                Ok(response) => return Ok(response),
+                Err(err) if Self::should_retry_completion(&err, attempt) => {
+                    Self::sleep_before_retry(attempt, &err).await;
+                    attempt += 1;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    async fn prompt_with_retry(
+        client: &impl Prompt,
+        message: impl Into<Message> + Clone + Send,
+    ) -> Result<String, PromptError> {
+        let mut attempt = 0;
+        loop {
+            let result = client.prompt(message.clone()).await;
+
+            match result {
+                Ok(response) => return Ok(response),
+                Err(err) if Self::should_retry_prompt(&err, attempt) => {
+                    Self::sleep_before_retry(attempt, &err).await;
+                    attempt += 1;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+
+    fn should_retry_completion(err: &CompletionError, attempt: usize) -> bool {
+        attempt < 3 && Self::is_retryable_completion_error(err)
+    }
+
+    fn should_retry_prompt(err: &PromptError, attempt: usize) -> bool {
+        attempt < 3 && Self::is_retryable_prompt_error(err)
+    }
+
+    fn is_retryable_completion_error(err: &CompletionError) -> bool {
+        matches!(
+            err,
+            CompletionError::HttpError(rig::http_client::Error::InvalidStatusCodeWithMessage(
+                status,
+                _,
+            )) if status.as_u16() == 502
+        )
+    }
+
+    fn is_retryable_prompt_error(err: &PromptError) -> bool {
+        matches!(err, PromptError::CompletionError(err) if Self::is_retryable_completion_error(err))
+    }
+
+    async fn sleep_before_retry(attempt: usize, err: &(impl std::fmt::Display + ?Sized)) {
+        let delay = Duration::from_millis(500 * 2_u64.pow(attempt as u32));
+        warn!(
+            attempt = attempt + 1,
+            delay_ms = delay.as_millis(),
+            error = %err,
+            "OpenAI request returned a retryable error; retrying"
+        );
+        sleep(delay).await;
     }
 
     fn collect_response<T>(
@@ -573,7 +656,7 @@ DM的discord ID为{}
             ])
             .build();
 
-        let reply = client.prompt(message).await?;
+        let reply = Self::prompt_with_retry(&client, message).await?;
 
         Ok(reply)
     }
@@ -612,12 +695,14 @@ DM的discord ID为{}",
             })
             .build();
 
-        let reply = client
-            .prompt(format!(
+        let reply = Self::prompt_with_retry(
+            &client,
+            format!(
                 "用户Discord ID {}; 用户名 {}: {}",
                 author_id, author_name, message
-            ))
-            .await?;
+            ),
+        )
+        .await?;
 
         info!(reply = %reply, author_id = %author_id, author_name = %author_name, "Stored new dialogue through LLM tool");
 
@@ -673,7 +758,7 @@ DM的discord ID为{}",
             .preamble(&prompt)
             .build();
 
-        let res = client.prompt(message).await?;
+        let res = Self::prompt_with_retry(&client, message).await?;
 
         self.story_service.insert_new_story(&res).await?;
 
@@ -1610,6 +1695,354 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
 
         assert_json_snapshot!(character.magic);
 
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_meta() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107487";
+
+        let res = gemini_service
+            .add_character_meta(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "我的位置是银月城酒馆，剧情摘要是刚加入冒险队伍，没有额外生物，没有死亡，正在喝茶，行动结束时间是Harptos 24 Mar 1555 12:35PM",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.meta);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_identity() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107488";
+
+        let res = gemini_service
+            .add_character_identity(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "角色名叫艾琳，是高等精灵，职业法师，子职业防护学派，背景是贤者，背景特性是研究员，阵营守序善良，女性，蓝眼，体型中型，身高5尺6寸，信仰密斯特拉，银发，白皙皮肤，年龄120岁，体重110磅，性格特质是喜欢记录所有奥秘，理念是知识应被守护，牵绊是导师留下的法典，缺陷是过度好奇，外貌特征有银色长发和蓝色长袍",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.identity);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_progression() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107489";
+
+        let res = gemini_service
+            .add_character_progression(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "角色等级3级，经验900，总生命骰3d8，最大生命值24，熟练加值2，护甲熟练轻甲和中甲，武器熟练长剑和短弓，工具熟练盗贼工具，语言通用语和精灵语",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.progression);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_combat() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107490";
+        let mut character = test_character();
+        character.meta.discord_id = discord_id.to_owned();
+        character_sheet_service.upsert_character(character).await?;
+
+        let res = gemini_service
+            .add_character_combat(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "护甲等级16，先攻2，当前生命值20，速度步行30尺，感官黑暗视觉60尺，抗性火焰，免疫无，易伤无，没有状态，力竭0级，豁免熟练体质和魅力，动作有攻击、冲刺、撤离，战斗动作有长剑命中加5伤害1d8+3、短弓命中加4伤害1d6+2",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.combat);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_inventory() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107491";
+
+        let res = gemini_service
+            .add_character_inventory(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "物品栏有长剑一把，重量3，价值15金币，已装备；治疗药水2瓶，每瓶重量1，价值50金币，未装备；旅行者衣服一套，重量4，价值2金币，未装备",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.inventory);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_abilities() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107492";
+
+        let res = gemini_service
+            .add_character_abilities(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "力量10，敏捷14，体质12，智力16，感知13，魅力8，所有额外修正值都是0",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.abilities_block);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_skills() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107493";
+        let mut character = test_character();
+        character.meta.discord_id = discord_id.to_owned();
+        character_sheet_service.upsert_character(character).await?;
+
+        let res = gemini_service
+            .add_character_skills(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "技能熟练项是奥秘、历史、调查、察觉，其他技能不熟练。所有技能的属性按DND默认：运动力量，体操敏捷，巧手敏捷，隐匿敏捷，奥秘历史调查自然宗教智力，驯兽洞悉医药察觉生存感知，欺瞒威吓表演游说魅力。被动值使用默认0",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.skills);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_traits() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107494";
+
+        let res = gemini_service
+            .add_character_traits(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "已解锁特性有黑暗视觉，描述是在微光中视为明亮、黑暗中视为微光，距离60尺；精类血统，描述是魅惑豁免有优势且不能被魔法睡眠。锁定特性有额外攻击，描述是每次攻击动作可攻击两次，5级解锁，没有其他解锁条件",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.traits);
+        assert!(gemini_service.cached_context.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_notes() -> Result<(), Box<dyn std::error::Error>> {
+        dotenvy::dotenv().ok();
+        let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
+        let message_sender = MockMessageSender;
+        let discord_id = "1483098634601107495";
+
+        let res = gemini_service
+            .add_character_notes(&message_sender, discord_id, "anyTHING")
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(
+                &message_sender,
+                discord_id,
+                "anyTHING",
+                "组织是银月法师会，盟友是导师赛琳，敌人是红袍巫师，背景故事是从烛堡出发寻找失落星图，其他备注是喜欢收集古代硬币",
+            )
+            .await?;
+
+        println!("Response: {res}");
+
+        let res = gemini_service
+            .conversation_continue(&message_sender, discord_id, "anyTHING", "确认")
+            .await?;
+
+        println!("Response: {res}");
+
+        let character = character_sheet_service.get_character(discord_id).await?;
+
+        assert_json_snapshot!(character.notes);
         assert!(gemini_service.cached_context.is_empty());
 
         Ok(())

@@ -1,0 +1,13 @@
+---
+source: src/llm/openai.rs
+expression: character.meta
+---
+{
+  "discordId": "1483098634601107487",
+  "location": "银月城酒馆",
+  "storySummary": "刚加入冒险队伍",
+  "extraCreatures": [],
+  "dead": false,
+  "performingAction": "正在喝茶",
+  "actionEndTime": "Harptos 24 Mar 1555 12:35PM"
+}

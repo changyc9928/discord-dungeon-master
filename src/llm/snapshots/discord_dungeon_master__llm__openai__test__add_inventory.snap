@@ -1,0 +1,29 @@
+---
+source: src/llm/openai.rs
+expression: character.inventory
+---
+{
+  "items": [
+    {
+      "name": "旅行者衣服",
+      "weight": 4,
+      "quantity": 1,
+      "costGp": 2,
+      "equiped": false
+    },
+    {
+      "name": "治疗药水",
+      "weight": 1,
+      "quantity": 2,
+      "costGp": 50,
+      "equiped": false
+    },
+    {
+      "name": "长剑",
+      "weight": 3,
+      "quantity": 1,
+      "costGp": 15,
+      "equiped": true
+    }
+  ]
+}

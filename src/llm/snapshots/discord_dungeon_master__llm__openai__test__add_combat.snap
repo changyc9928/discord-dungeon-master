@@ -1,0 +1,82 @@
+---
+source: src/llm/openai.rs
+expression: character.combat
+---
+{
+  "armorClass": 15,
+  "initiative": 2,
+  "hitPoints": 16,
+  "speed": [
+    {
+      "name": "Walking",
+      "value": "30 ft"
+    }
+  ],
+  "senses": [
+    {
+      "name": "Darkvision",
+      "value": "60 ft"
+    }
+  ],
+  "defenses": {
+    "resistance": [
+      "Necrotic",
+      "Radiant"
+    ],
+    "immunities": [],
+    "vulnerabilities": []
+  },
+  "conditions": [],
+  "exhaustionLevel": 0,
+  "savingThrows": {
+    "proficiency": [
+      "CONSTITUTION",
+      "CHARISMA"
+    ],
+    "strengthSavingThrows": -1,
+    "intelligenceSavingThrows": 0,
+    "dexteritySavingThrows": 2,
+    "wisdomSavingThrows": 0,
+    "constitutionSavingThrows": 4,
+    "charismaSavingThrows": 5
+  },
+  "actions": [
+    {
+      "name": "Attack",
+      "usedTime": null,
+      "maxUseTime": null
+    },
+    {
+      "name": "Dash",
+      "usedTime": null,
+      "maxUseTime": null
+    },
+    {
+      "name": "Disengage",
+      "usedTime": null,
+      "maxUseTime": null
+    }
+  ],
+  "combatActions": [
+    {
+      "name": "Dagger",
+      "hitDc": 4,
+      "damage": "1d4+2"
+    },
+    {
+      "name": "Dagger",
+      "hitDc": 4,
+      "damage": "1d4+2"
+    },
+    {
+      "name": "Ray of Front",
+      "hitDc": 5,
+      "damage": "1d8"
+    },
+    {
+      "name": "Unarmed Strike",
+      "hitDc": 1,
+      "damage": "0"
+    }
+  ]
+}

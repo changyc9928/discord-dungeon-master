@@ -1,0 +1,11 @@
+---
+source: src/llm/openai.rs
+expression: character.notes
+---
+{
+  "organizations": "银月法师会",
+  "allies": "导师赛琳",
+  "enemies": "红袍巫师",
+  "backstory": "从烛堡出发寻找失落星图",
+  "other": "喜欢收集古代硬币"
+}
