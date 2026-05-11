@@ -2,9 +2,11 @@ use async_trait::async_trait;
 
 use crate::{discord_bot::MessageSender, llm::error::LlmError};
 
+pub mod common;
 pub mod error;
 pub mod gemini;
 pub mod openai;
+pub mod provider;
 
 #[async_trait]
 pub trait LLM: Send + Sync {
