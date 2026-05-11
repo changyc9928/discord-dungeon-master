@@ -226,17 +226,40 @@ pub async fn add_character_notes(ctx: Context<'_>) -> Result<(), DiscordBotError
 /// Retrieves a character's information from the game
 #[poise::command(slash_command)]
 pub async fn get_character(ctx: Context<'_>, discord_id: String) -> Result<(), DiscordBotError> {
-    // 1️⃣ Defer interaction so Discord doesn't timeout
+    // Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    // 2️⃣ Call your LLM
+    // Call your service
     let data = ctx.data();
     let service = &data.character_sheet_service;
     let response = service.get_character(&discord_id).await?;
 
-    let reply = CreateReply::default().content(serde_json::to_string_pretty(&response)?);
-    // 3️⃣ Send follow-up response
-    ctx.send(reply).await?;
+    // Pretty JSON
+    let json = serde_json::to_string_pretty(&response)?;
+
+    // Discord message limit safety buffer
+    const CHUNK_SIZE: usize = 1800;
+
+    // Split into chunks
+    let chunks: Vec<String> = json
+        .as_bytes()
+        .chunks(CHUNK_SIZE)
+        .map(|chunk| String::from_utf8_lossy(chunk).to_string())
+        .collect();
+
+    // Send multiple replies
+    for (i, chunk) in chunks.iter().enumerate() {
+        let content = format!(
+            "```json\n// Part {}/{}\n{}\n```",
+            i + 1,
+            chunks.len(),
+            chunk
+        );
+
+        let reply = CreateReply::default().content(content);
+
+        ctx.send(reply).await?;
+    }
 
     Ok(())
 }
