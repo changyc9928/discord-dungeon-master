@@ -1,6 +1,11 @@
 use std::sync::Arc;
 
-use rig::{agent::Agent, client::CompletionClient, providers::openai, tool::ToolDyn};
+use rig::{
+    agent::Agent,
+    client::{CompletionClient, ProviderClient},
+    providers::openai,
+    tool::ToolDyn,
+};
 
 use crate::{
     character::service::CharacterSheetService,
@@ -12,7 +17,6 @@ use crate::{
 
 pub struct OpenAi {
     pub core: LlmCore,
-    base_url: String,
 }
 
 impl OpenAi {
@@ -24,7 +28,7 @@ impl OpenAi {
         dm_discord_id: String,
         folder_path: String,
         compile_trigger: i64,
-        base_url: String,
+        base_url: Option<String>,
         retry_attempt: i64,
     ) -> Result<Self, LlmError> {
         Ok(Self {
@@ -37,8 +41,8 @@ impl OpenAi {
                 folder_path,
                 compile_trigger as usize,
                 retry_attempt as usize,
+                base_url,
             ),
-            base_url,
         })
     }
 }
@@ -60,11 +64,18 @@ impl LlmProvider for OpenAi {
         prompt: &str,
         tools: Vec<Box<dyn ToolDyn>>,
     ) -> Result<Self::Agent, LlmError> {
-        let api_key = std::env::var("OPENAI_KEY")?;
-        Ok(openai::Client::builder()
-            .base_url(self.base_url.clone())
-            .api_key(api_key)
-            .build()?
+        if let Some(base_url) = &self.core.base_url {
+            let api_key = std::env::var("OPENAI_API_KEY")?;
+            return Ok(openai::Client::builder()
+                .base_url(base_url)
+                .api_key(api_key)
+                .build()?
+                .agent(self.core.model.clone())
+                .preamble(prompt)
+                .tools(tools)
+                .build());
+        }
+        Ok(openai::Client::from_env()?
             .agent(self.core.model.clone())
             .preamble(prompt)
             .tools(tools)

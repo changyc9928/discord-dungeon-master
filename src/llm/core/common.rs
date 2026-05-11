@@ -47,6 +47,7 @@ pub struct LlmCore {
     pub dm_discord_id: String,
     pub folder_path: String,
     pub compile_trigger: usize,
+    pub base_url: Option<String>,
     pub retry_attempt: usize,
 }
 
@@ -60,6 +61,7 @@ impl LlmCore {
         folder_path: String,
         compile_trigger: usize,
         retry_attempt: usize,
+        base_url: Option<String>,
     ) -> Self {
         Self {
             model: model.to_owned(),
@@ -71,6 +73,7 @@ impl LlmCore {
             folder_path,
             compile_trigger,
             retry_attempt,
+            base_url,
         }
     }
 
@@ -217,5 +220,9 @@ impl LlmCore {
                 AssistantContent::Image(image) => info!("Image sent: {image:?}"),
             }
         }
+    }
+
+    pub fn remove_cache(&mut self, discord_user_id: &str) {
+        self.cached_context.remove(discord_user_id);
     }
 }

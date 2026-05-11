@@ -294,6 +294,10 @@ pub trait LlmProvider: Send + Sync {
 
         Ok(())
     }
+
+    fn remove_cache_impl(&mut self, discord_user_id: &str) {
+        self.core_mut().remove_cache(discord_user_id)
+    }
 }
 
 macro_rules! impl_llm_for_provider {
@@ -354,6 +358,10 @@ macro_rules! impl_llm_for_provider {
 
             async fn new_summary(&mut self) -> Result<(), LlmError> {
                 self.new_summary_impl().await
+            }
+
+            async fn remove_cache(&mut self, discord_user_id: &str) {
+                self.remove_cache_impl(discord_user_id)
             }
         }
     };

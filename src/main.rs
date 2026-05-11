@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             service_config.config.dm_id.clone(),
             service_config.config.prompts_folder_path,
             service_config.config.compile_trigger,
-            service_config.config.base_url.unwrap(),
+            service_config.config.base_url,
             service_config.config.retry_attempt,
         )?)),
         config::Provider::Gemini => Arc::new(Mutex::new(Gemini::new(
@@ -83,6 +83,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             service_config.config.dm_id.clone(),
             service_config.config.prompts_folder_path,
             service_config.config.compile_trigger,
+            service_config.config.base_url,
             service_config.config.retry_attempt,
         )?)),
         config::Provider::DeepSeek => todo!(),

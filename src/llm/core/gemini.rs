@@ -28,6 +28,7 @@ impl Gemini {
         dm_discord_id: String,
         folder_path: String,
         compile_trigger: i64,
+        base_url: Option<String>,
         retry_attempt: i64,
     ) -> Result<Self, LlmError> {
         Ok(Self {
@@ -40,6 +41,7 @@ impl Gemini {
                 folder_path,
                 compile_trigger as usize,
                 retry_attempt as usize,
+                base_url,
             ),
         })
     }
@@ -62,6 +64,17 @@ impl LlmProvider for Gemini {
         prompt: &str,
         tools: Vec<Box<dyn ToolDyn>>,
     ) -> Result<Self::Agent, LlmError> {
+        if let Some(base_url) = &self.core.base_url {
+            let api_key = std::env::var("GEMINI_API_KEY")?;
+            return Ok(gemini::Client::builder()
+                .base_url(base_url)
+                .api_key(api_key)
+                .build()?
+                .agent(self.core.model.clone())
+                .preamble(prompt)
+                .tools(tools)
+                .build());
+        }
         Ok(gemini::Client::from_env()?
             .agent(self.core.model.clone())
             .preamble(prompt)

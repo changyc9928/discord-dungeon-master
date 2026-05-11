@@ -240,3 +240,25 @@ pub async fn get_character(ctx: Context<'_>, discord_id: String) -> Result<(), D
 
     Ok(())
 }
+
+// Used to remove conversation context
+#[poise::command(slash_command)]
+pub async fn remove_cache(ctx: Context<'_>) -> Result<(), DiscordBotError> {
+    // 1️⃣ Defer interaction so Discord doesn't timeout
+    ctx.defer().await?;
+
+    // 2️⃣ Call your LLM
+    let data = ctx.data();
+    let llm = &data.llm;
+    let response = llm
+        .lock()
+        .await
+        .add_character_meta(ctx.author().id.to_string().as_str())
+        .await?;
+
+    let reply = CreateReply::default().content(response);
+    // 3️⃣ Send follow-up response
+    ctx.send(reply).await?;
+
+    Ok(())
+}
