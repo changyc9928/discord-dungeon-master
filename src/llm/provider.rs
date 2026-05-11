@@ -5,7 +5,6 @@ use rig::{completion::Completion, message::Message, tool::ToolDyn};
 use tracing::info;
 
 use crate::{
-    discord_bot::MessageSender,
     llm::{
         LLM,
         common::{Cache, LlmCore, ToolFactory},
@@ -306,24 +305,18 @@ macro_rules! impl_llm_for_provider {
         {
             async fn request_to_llm(
                 &mut self,
-                ctx: &dyn MessageSender,
-                discord_username: &str,
                 discord_user_id: &str,
                 discord_channel_message: &str,
             ) -> Result<String, LlmError> {
-                let _ = (ctx, discord_username);
                 self.request_to_llm_impl(discord_user_id, discord_channel_message)
                     .await
             }
 
             async fn conversation_continue(
                 &mut self,
-                ctx: &dyn MessageSender,
                 discord_user_id: &str,
-                discord_username: &str,
                 discord_channel_message: &str,
             ) -> Result<String, LlmError> {
-                let _ = (ctx, discord_username);
                 if !self.core().cached_context.contains_key(discord_user_id) {
                     return Ok("对话上下文不存在，请使用slash command来开启你需要的功能对话".to_owned());
                 }
@@ -334,9 +327,7 @@ macro_rules! impl_llm_for_provider {
             $(
                 async fn $fn_name(
                     &mut self,
-                    _: &dyn MessageSender,
                     discord_user_id: &str,
-                    _: &str,
                 ) -> Result<String, LlmError> {
                     let service = self.core().character_sheet_service.clone();
 
@@ -353,18 +344,15 @@ macro_rules! impl_llm_for_provider {
 
             async fn store_new_dialogue(
                 &mut self,
-                ctx: &dyn MessageSender,
                 message: &str,
                 author_id: &str,
                 author_name: &str,
             ) -> Result<(), LlmError> {
-                let _ = ctx;
                 self.store_new_dialogue_impl(message, author_id, author_name)
                     .await
             }
 
-            async fn new_summary(&mut self, ctx: &dyn MessageSender) -> Result<(), LlmError> {
-                let _ = ctx;
+            async fn new_summary(&mut self) -> Result<(), LlmError> {
                 self.new_summary_impl().await
             }
         }

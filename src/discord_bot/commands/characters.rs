@@ -1,6 +1,5 @@
 use poise::CreateReply;
 
-use crate::discord_bot::DiscordSender;
 use crate::discord_bot::error::DiscordBotError;
 use crate::discord_bot::handler::Context;
 
@@ -10,22 +9,13 @@ pub async fn add_character_meta(ctx: Context<'_>) -> Result<(), DiscordBotError>
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_meta(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_meta(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -41,22 +31,13 @@ pub async fn add_character_identity(ctx: Context<'_>) -> Result<(), DiscordBotEr
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_identity(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_identity(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -72,22 +53,13 @@ pub async fn add_character_progression(ctx: Context<'_>) -> Result<(), DiscordBo
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_progression(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_progression(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -103,22 +75,13 @@ pub async fn add_character_combat(ctx: Context<'_>) -> Result<(), DiscordBotErro
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_combat(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_combat(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -134,22 +97,13 @@ pub async fn add_character_inventory(ctx: Context<'_>) -> Result<(), DiscordBotE
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_inventory(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_inventory(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -165,22 +119,13 @@ pub async fn add_character_spells(ctx: Context<'_>) -> Result<(), DiscordBotErro
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_spells(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_spells(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -196,22 +141,13 @@ pub async fn add_character_abilities(ctx: Context<'_>) -> Result<(), DiscordBotE
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_abilities(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_abilities(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -227,22 +163,13 @@ pub async fn add_character_skills(ctx: Context<'_>) -> Result<(), DiscordBotErro
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_skills(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_skills(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -258,22 +185,13 @@ pub async fn add_character_traits(ctx: Context<'_>) -> Result<(), DiscordBotErro
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_traits(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_traits(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);
@@ -289,22 +207,13 @@ pub async fn add_character_notes(ctx: Context<'_>) -> Result<(), DiscordBotError
     // 1️⃣ Defer interaction so Discord doesn't timeout
     ctx.defer().await?;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.serenity_context().clone(),
-        channel_id: ctx.channel_id().to_string(),
-    };
-
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
     let response = llm
         .lock()
         .await
-        .add_character_notes(
-            &message_sender,
-            ctx.author().id.to_string().as_str(),
-            ctx.author().name.as_str(),
-        )
+        .add_character_notes(ctx.author().id.to_string().as_str())
         .await?;
 
     let reply = CreateReply::default().content(response);

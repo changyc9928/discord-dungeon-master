@@ -6,7 +6,6 @@ use tokio::time::{Duration, interval};
 use tracing::{debug, info};
 
 use crate::character::service::CharacterSheetService;
-use crate::discord_bot::DiscordSender;
 use crate::discord_bot::{commands, error::DiscordBotError};
 use crate::llm::LLM;
 
@@ -69,23 +68,13 @@ async fn event_handler(
         author_name, new_message.content
     );
 
-    let message_sender = DiscordSender {
-        ctx: ctx.clone(),
-        channel_id: data.channel_id.clone(),
-    };
-
     if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) && !new_message.author.bot
     {
         let llm = &data.llm;
         let response = llm
             .lock()
             .await
-            .conversation_continue(
-                &message_sender,
-                &author_id,
-                &author_name,
-                &new_message.content,
-            )
+            .conversation_continue(&author_id, &new_message.content)
             .await;
         let response = match response {
             Ok(r) => r,
@@ -105,12 +94,7 @@ async fn event_handler(
             .llm
             .lock()
             .await
-            .store_new_dialogue(
-                &message_sender,
-                &new_message.content,
-                &author_id,
-                &author_name,
-            )
+            .store_new_dialogue(&new_message.content, &author_id, &author_name)
             .await
         {
             tracing::error!("LLM error: {}", e);
@@ -123,7 +107,7 @@ async fn event_handler(
             }
         }
 
-        if let Err(e) = data.llm.lock().await.new_summary(&message_sender).await {
+        if let Err(e) = data.llm.lock().await.new_summary().await {
             tracing::error!("LLM error: {}", e);
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(send_err) = channel_id
@@ -266,17 +250,11 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
     // Use the most recent message's author for the LLM request
     let primary_author = &messages.last().unwrap().author_id;
 
-    let message_sender = DiscordSender {
-        ctx: ctx.clone(),
-        channel_id: data.channel_id.clone(),
-    };
-
     if let Err(e) = data
         .llm
         .lock()
         .await
         .store_new_dialogue(
-            &message_sender,
             &compiled_content,
             primary_author,
             &messages.last().unwrap().author_name,
@@ -293,7 +271,7 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
         }
     }
 
-    if let Err(e) = data.llm.lock().await.new_summary(&message_sender).await {
+    if let Err(e) = data.llm.lock().await.new_summary().await {
         tracing::error!("LLM error: {}", e);
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(send_err) = channel_id
@@ -308,12 +286,7 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
         .llm
         .lock()
         .await
-        .request_to_llm(
-            &message_sender,
-            &messages.last().unwrap().author_name,
-            primary_author,
-            &compiled_content,
-        )
+        .request_to_llm(primary_author, &compiled_content)
         .await
     {
         Ok(response) => {
