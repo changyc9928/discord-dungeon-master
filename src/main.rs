@@ -7,7 +7,7 @@ use crate::{
     config::{AiDmConfig, ServiceConfig},
     llm::{
         Llm,
-        core::{gemini::Gemini, openai::OpenAi},
+        core::{deepseek::DeepSeek, gemini::Gemini, openai::OpenAi},
     },
     pg_pool::{TestPgPool, TestPgPoolConfig},
     story::{
@@ -86,7 +86,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             service_config.config.base_url,
             service_config.config.retry_attempt,
         )?)),
-        config::Provider::DeepSeek => todo!(),
+        config::Provider::DeepSeek => Arc::new(Mutex::new(DeepSeek::new(
+            &service_config.config.model,
+            tool_service,
+            story_service,
+            Arc::clone(&character_sheet_service),
+            service_config.config.dm_id.clone(),
+            service_config.config.prompts_folder_path,
+            service_config.config.compile_trigger,
+            service_config.config.base_url,
+            service_config.config.retry_attempt,
+        )?)),
         config::Provider::Qwen => todo!(),
         config::Provider::Anthropic => todo!(),
         config::Provider::OpenRouter => todo!(),
