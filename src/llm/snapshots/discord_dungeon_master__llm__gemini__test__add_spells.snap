@@ -5,28 +5,28 @@ expression: character.magic
 {
   "spells": [
     {
-      "name": "光亮术",
+      "name": "Light",
       "level": 0,
-      "castTime": "1个动作",
-      "range": "触及",
+      "castTime": "1 action",
+      "range": "Touch",
       "hitDc": null,
-      "effect": "使一个物体发出半径20尺的明亮光照，持续1小时。"
+      "effect": "Touch one object that is no larger than 10 feet in any dimension. The object sheds bright light in a 20-foot radius."
     },
     {
-      "name": "寒冰射线",
-      "level": 0,
-      "castTime": "1个动作",
-      "range": "60尺",
-      "hitDc": 5,
-      "effect": "发射一道寒冰射线，造成1d8寒冰伤害，并将目标的移动速度降低10尺。"
-    },
-    {
-      "name": "魔法飞弹",
+      "name": "Magic Missile",
       "level": 1,
-      "castTime": "1个动作",
-      "range": "120尺",
-      "hitDc": 13,
-      "effect": "创造三枚魔法飞弹，每枚造成1d4+1力场伤害，必定命中。"
+      "castTime": "1 action",
+      "range": "120 feet",
+      "hitDc": null,
+      "effect": "You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range. A dart deals 1d4 + 1 force damage to its target. The darts all strike simultaneously, and you can make them hit one creature or several."
+    },
+    {
+      "name": "Ray of Frost",
+      "level": 0,
+      "castTime": "1 action",
+      "range": "60 feet",
+      "hitDc": 5,
+      "effect": "A frigid beam of blue-white light streaks toward a creature within range. Make a ranged spell attack. On a hit, the target takes 1d8 cold damage, and its speed is reduced by 10 feet until the start of your next turn."
     }
   ],
   "spellSlots": [

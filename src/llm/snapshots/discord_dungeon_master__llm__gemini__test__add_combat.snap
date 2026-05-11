@@ -1,0 +1,71 @@
+---
+source: src/llm/gemini.rs
+expression: character.combat
+---
+{
+  "armorClass": 16,
+  "initiative": 2,
+  "hitPoints": 20,
+  "speed": [
+    {
+      "name": "步行",
+      "value": "30尺"
+    }
+  ],
+  "senses": [
+    {
+      "name": "黑暗视觉",
+      "value": "60尺"
+    }
+  ],
+  "defenses": {
+    "resistance": [
+      "火焰"
+    ],
+    "immunities": [],
+    "vulnerabilities": []
+  },
+  "conditions": [],
+  "exhaustionLevel": 0,
+  "savingThrows": {
+    "proficiency": [
+      "CONSTITUTION",
+      "CHARISMA"
+    ],
+    "strengthSavingThrows": -1,
+    "intelligenceSavingThrows": 0,
+    "dexteritySavingThrows": 2,
+    "wisdomSavingThrows": 0,
+    "constitutionSavingThrows": 4,
+    "charismaSavingThrows": 5
+  },
+  "actions": [
+    {
+      "name": "冲刺",
+      "usedTime": null,
+      "maxUseTime": null
+    },
+    {
+      "name": "撤离",
+      "usedTime": null,
+      "maxUseTime": null
+    },
+    {
+      "name": "攻击",
+      "usedTime": null,
+      "maxUseTime": null
+    }
+  ],
+  "combatActions": [
+    {
+      "name": "短弓",
+      "hitDc": 4,
+      "damage": "1d6+2"
+    },
+    {
+      "name": "长剑",
+      "hitDc": 5,
+      "damage": "1d8+3"
+    }
+  ]
+}
