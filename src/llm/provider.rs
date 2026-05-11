@@ -360,7 +360,7 @@ macro_rules! impl_llm_for_provider {
                 self.new_summary_impl().await
             }
 
-            async fn remove_cache(&mut self, discord_user_id: &str) {
+            fn remove_cache(&mut self, discord_user_id: &str) {
                 self.remove_cache_impl(discord_user_id)
             }
         }

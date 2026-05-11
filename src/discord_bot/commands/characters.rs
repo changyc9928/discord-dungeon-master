@@ -250,13 +250,15 @@ pub async fn remove_cache(ctx: Context<'_>) -> Result<(), DiscordBotError> {
     // 2️⃣ Call your LLM
     let data = ctx.data();
     let llm = &data.llm;
-    let response = llm
-        .lock()
+    llm.lock()
         .await
-        .add_character_meta(ctx.author().id.to_string().as_str())
-        .await?;
+        .remove_cache(ctx.author().id.to_string().as_str());
 
-    let reply = CreateReply::default().content(response);
+    let reply = CreateReply::default().content(format!(
+        "已成功为{} - {}移除缓存",
+        ctx.author().id.to_string(),
+        ctx.author().name
+    ));
     // 3️⃣ Send follow-up response
     ctx.send(reply).await?;
 

@@ -52,5 +52,5 @@ pub trait Llm: Send + Sync {
 
     async fn new_summary(&mut self) -> Result<(), LlmError>;
 
-    async fn remove_cache(&mut self, discord_user_id: &str);
+    fn remove_cache(&mut self, discord_user_id: &str);
 }
