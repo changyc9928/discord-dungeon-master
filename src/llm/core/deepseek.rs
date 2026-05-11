@@ -65,7 +65,7 @@ impl LlmProvider for DeepSeek {
         tools: Vec<Box<dyn ToolDyn>>,
     ) -> Result<Self::Agent, LlmError> {
         if let Some(base_url) = &self.core.base_url {
-            let api_key = std::env::var("GEMINI_API_KEY")?;
+            let api_key = std::env::var("DEEPSEEK_API_KEY")?;
             return Ok(deepseek::Client::builder()
                 .base_url(base_url)
                 .api_key(api_key)
