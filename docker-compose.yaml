@@ -23,7 +23,8 @@ services:
       - DATABASE__HOST=db
       - DATABASE__PORT=5432
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENAI_KEY=${OPENAI_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - RUST_LOG=none,discord_dungeon_master=debug,sqlx=debug
     ports:
