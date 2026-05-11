@@ -6,8 +6,8 @@ use tracing::info;
 
 use crate::{
     llm::{
-        LLM,
-        common::{Cache, LlmCore, ToolFactory},
+        Llm,
+        core::common::{Cache, LlmCore, ToolFactory},
         error::LlmError,
     },
     tool::types::{
@@ -299,7 +299,7 @@ pub trait LlmProvider: Send + Sync {
 macro_rules! impl_llm_for_provider {
     ($($fn_name:ident => $tool:ident),+ $(,)?) => {
         #[async_trait]
-        impl<T> LLM for T
+        impl<T> Llm for T
         where
             T: LlmProvider,
         {

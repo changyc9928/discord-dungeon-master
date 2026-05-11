@@ -141,9 +141,21 @@ impl<C: DeserializeOwned> ServiceConfig<C> {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Provider {
+    OpenAi,
+    Gemini,
+    DeepSeek,
+    Qwen,
+    Anthropic,
+    OpenRouter,
+    Ollama,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AiDmConfig {
-    pub gemini_model: String,
+    pub model: String,
     #[serde(default)]
     pub discord_token: Option<String>,
     pub channel_id: String,
@@ -156,4 +168,5 @@ pub struct AiDmConfig {
     pub prompts_folder_path: String,
     pub retry_attempt: i64,
     pub base_url: Option<String>,
+    pub provider: Provider,
 }

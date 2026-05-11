@@ -7,7 +7,7 @@ use tracing::{debug, info};
 
 use crate::character::service::CharacterSheetService;
 use crate::discord_bot::{commands, error::DiscordBotError};
-use crate::llm::LLM;
+use crate::llm::Llm;
 
 pub type Error = DiscordBotError;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -22,7 +22,7 @@ pub struct BufferedMessage {
 
 #[derive(Clone)]
 pub struct Data {
-    pub llm: Arc<Mutex<dyn LLM>>,
+    pub llm: Arc<Mutex<dyn Llm>>,
     pub channel_id: String,
     pub self_discord_id: String,
     pub dm_discord_id: String,
@@ -124,7 +124,7 @@ async fn event_handler(
 
 pub async fn start_bot(
     token: &str,
-    llm: Arc<Mutex<dyn LLM>>,
+    llm: Arc<Mutex<dyn Llm>>,
     channel_id: String,
     self_discord_id: String,
     dm_discord_id: String,

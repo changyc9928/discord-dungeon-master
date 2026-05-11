@@ -1,20 +1,25 @@
 use std::sync::Arc;
 
-use rig::{agent::Agent, client::CompletionClient, providers::openai, tool::ToolDyn};
+use rig::{
+    agent::Agent,
+    client::{CompletionClient, ProviderClient},
+    providers::gemini,
+    tool::ToolDyn,
+};
 
 use crate::{
     character::service::CharacterSheetService,
-    llm::{common::LlmCore, error::LlmError, provider::LlmProvider},
+    llm::core::common::LlmCore,
+    llm::{error::LlmError, provider::LlmProvider},
     story::service::StoryService,
     tool::service::ToolService,
 };
 
-pub struct OpenAi {
+pub struct Gemini {
     pub core: LlmCore,
-    base_url: String,
 }
 
-impl OpenAi {
+impl Gemini {
     pub fn new(
         model: &str,
         tool_service: Arc<ToolService>,
@@ -23,7 +28,6 @@ impl OpenAi {
         dm_discord_id: String,
         folder_path: String,
         compile_trigger: i64,
-        base_url: String,
         retry_attempt: i64,
     ) -> Result<Self, LlmError> {
         Ok(Self {
@@ -37,14 +41,13 @@ impl OpenAi {
                 compile_trigger as usize,
                 retry_attempt as usize,
             ),
-            base_url,
         })
     }
 }
 
-impl LlmProvider for OpenAi {
-    type Agent = Agent<openai::responses_api::ResponsesCompletionModel>;
-    type CompletionModel = openai::responses_api::ResponsesCompletionModel;
+impl LlmProvider for Gemini {
+    type Agent = Agent<gemini::CompletionModel>;
+    type CompletionModel = gemini::CompletionModel;
 
     fn core(&self) -> &LlmCore {
         &self.core
@@ -59,11 +62,7 @@ impl LlmProvider for OpenAi {
         prompt: &str,
         tools: Vec<Box<dyn ToolDyn>>,
     ) -> Result<Self::Agent, LlmError> {
-        let api_key = std::env::var("OPENAI_KEY")?;
-        Ok(openai::Client::builder()
-            .base_url(self.base_url.clone())
-            .api_key(api_key)
-            .build()?
+        Ok(gemini::Client::from_env()?
             .agent(self.core.model.clone())
             .preamble(prompt)
             .tools(tools)

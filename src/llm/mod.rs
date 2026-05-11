@@ -2,14 +2,12 @@ use async_trait::async_trait;
 
 use crate::llm::error::LlmError;
 
-pub mod common;
+pub mod core;
 pub mod error;
-pub mod gemini;
-pub mod openai;
 pub mod provider;
 
 #[async_trait]
-pub trait LLM: Send + Sync {
+pub trait Llm: Send + Sync {
     async fn request_to_llm(
         &mut self,
         discord_user_id: &str,

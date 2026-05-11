@@ -5,7 +5,10 @@ use tokio::sync::Mutex;
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
     config::{AiDmConfig, ServiceConfig},
-    llm::openai::OpenAi,
+    llm::{
+        Llm,
+        core::{gemini::Gemini, openai::OpenAi},
+    },
     pg_pool::{TestPgPool, TestPgPoolConfig},
     story::{
         repository::{DialogueRepository, StoryRepository},
@@ -60,26 +63,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
         story_service: Arc::clone(&story_service),
     });
 
-    // let gemini: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(Gemini::new(
-    //     &service_config.config.gemini_model,
-    //     tool_service,
-    //     story_service,
-    //     Arc::clone(&character_sheet_service),
-    //     service_config.config.dm_id.clone(),
-    //     service_config.config.promopts_folder_path,
-    //     service_config.config.compile_trigger,
-    // )?));
-    let openai: Arc<Mutex<dyn llm::LLM>> = Arc::new(Mutex::new(OpenAi::new(
-        &service_config.config.gemini_model,
-        tool_service,
-        story_service,
-        Arc::clone(&character_sheet_service),
-        service_config.config.dm_id.clone(),
-        service_config.config.prompts_folder_path,
-        service_config.config.compile_trigger,
-        service_config.config.base_url.unwrap(),
-        service_config.config.retry_attempt,
-    )?));
+    let llm: Arc<Mutex<dyn Llm>> = match service_config.config.provider {
+        config::Provider::OpenAi => Arc::new(Mutex::new(OpenAi::new(
+            &service_config.config.model,
+            tool_service,
+            story_service,
+            Arc::clone(&character_sheet_service),
+            service_config.config.dm_id.clone(),
+            service_config.config.prompts_folder_path,
+            service_config.config.compile_trigger,
+            service_config.config.base_url.unwrap(),
+            service_config.config.retry_attempt,
+        )?)),
+        config::Provider::Gemini => Arc::new(Mutex::new(Gemini::new(
+            &service_config.config.model,
+            tool_service,
+            story_service,
+            Arc::clone(&character_sheet_service),
+            service_config.config.dm_id.clone(),
+            service_config.config.prompts_folder_path,
+            service_config.config.compile_trigger,
+            service_config.config.retry_attempt,
+        )?)),
+        config::Provider::DeepSeek => todo!(),
+        config::Provider::Qwen => todo!(),
+        config::Provider::Anthropic => todo!(),
+        config::Provider::OpenRouter => todo!(),
+        config::Provider::Ollama => todo!(),
+    };
 
     let discord_token = service_config
         .config
@@ -90,7 +101,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     discord_bot::handler::start_bot(
         &discord_token,
-        openai,
+        llm,
         service_config.config.channel_id.clone(),
         service_config.config.self_discord_id.clone(),
         service_config.config.dm_id.clone(),
