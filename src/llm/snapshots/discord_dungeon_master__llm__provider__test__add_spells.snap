@@ -1,0 +1,48 @@
+---
+source: src/llm/provider.rs
+expression: character.magic
+---
+{
+  "spells": [
+    {
+      "name": "光亮术 (Light)",
+      "level": 0,
+      "castTime": "1 action",
+      "range": "Touch",
+      "hitDc": null,
+      "effect": "Touch an object, it sheds bright light in a 20-foot radius."
+    },
+    {
+      "name": "寒冰射线 (Ray of Frost)",
+      "level": 0,
+      "castTime": "1 action",
+      "range": "60 feet",
+      "hitDc": 5,
+      "effect": "Make a ranged spell attack. On a hit, 1d8 cold damage and speed reduced by 10 ft."
+    },
+    {
+      "name": "魔法飞弹 (Magic Missile)",
+      "level": 1,
+      "castTime": "1 action",
+      "range": "120 feet",
+      "hitDc": 13,
+      "effect": "Create three magical darts that each deal 1d4+1 force damage."
+    }
+  ],
+  "spellSlots": [
+    {
+      "level": 1,
+      "slot": 4,
+      "used": 0
+    },
+    {
+      "level": 2,
+      "slot": 2,
+      "used": 0
+    }
+  ],
+  "abilityType": "CHARISMA",
+  "abilityModifier": 3,
+  "spellAttack": 5,
+  "saveDc": 13
+}

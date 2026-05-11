@@ -1,25 +1,25 @@
 ---
-source: src/llm/openai.rs
+source: src/llm/provider.rs
 expression: character.identity
 ---
 {
   "characterName": "艾琳",
   "species": "高等精灵",
-  "subSpecies": "无",
+  "subSpecies": null,
   "class": "法师",
   "subClass": "防护学派",
   "characteristics": {
     "background": "贤者",
     "backgroundFeature": "研究员",
-    "backgroundFeatureDescription": "确认",
+    "backgroundFeatureDescription": "你拥有研究知识的背景，且总能通过图书馆、导师或档案渠道找到所需的特定知识。",
     "alignment": "守序善良",
     "gender": "女性",
-    "eyes": "蓝眼",
+    "eyes": "蓝色",
     "size": "中型",
     "height": "5尺6寸",
     "faith": "密斯特拉",
-    "hair": "银发",
-    "skin": "白皙皮肤",
+    "hair": "银色",
+    "skin": "白皙",
     "age": 120,
     "weight": "110磅",
     "personalityTraits": "喜欢记录所有奥秘",

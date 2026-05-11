@@ -1,0 +1,10 @@
+---
+source: src/llm/provider.rs
+expression: response
+---
+[
+  {
+    "summary": "角色创建流程已完成，系统处于初始化状态。在昏暗且弥漫着酒精味的酒馆中，冒险者们正议论着近期发生的旅人失踪事件。Dungeon Master描述了酒馆内人声鼎沸的景象，同时指出泽阿里尔正在整理装备，而庄芳宜已走进酒馆并决定在此饮酒。此外，Unknown Adventurer - shaomo1拔出剑并询问攻击哥布林的后果，而Dungeon Master随后提示街角传来了关于失踪旅人的骚动。",
+    "updated_at": "[timestamp]"
+  }
+]

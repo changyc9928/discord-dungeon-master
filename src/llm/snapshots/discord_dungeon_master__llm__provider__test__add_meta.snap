@@ -1,12 +1,14 @@
 ---
-source: src/llm/gemini.rs
+source: src/llm/provider.rs
 expression: character.meta
 ---
 {
   "discordId": "1483098634601107487",
   "location": "银月城酒馆",
   "storySummary": "刚加入冒险队伍",
-  "extraCreatures": [],
+  "extraCreatures": [
+    "无"
+  ],
   "dead": false,
   "performingAction": "喝茶",
   "actionEndTime": "Harptos 24 Mar 1555 12:35PM"

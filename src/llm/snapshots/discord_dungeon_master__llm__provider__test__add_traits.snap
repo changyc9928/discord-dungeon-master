@@ -1,5 +1,5 @@
 ---
-source: src/llm/gemini.rs
+source: src/llm/provider.rs
 expression: character.traits
 ---
 {
@@ -15,7 +15,7 @@ expression: character.traits
     },
     {
       "name": "黑暗视觉",
-      "description": "在微光中视为明亮、黑暗中视为微光，距离 60 尺",
+      "description": "在微光中视为明亮、黑暗中视为微光，距离60尺",
       "duration": null,
       "trigger": null,
       "cooldown": null,

@@ -11,7 +11,7 @@ database:
   username: postgres
   password: postgres
 
-provider: "openai"
+provider: "OPEN_AI"
 
 base-url: "https://api.moxiuren.org/v1/"
 

@@ -1,27 +1,26 @@
 ---
-source: src/llm/openai.rs
+source: src/llm/provider.rs
 expression: character.combat
 ---
 {
-  "armorClass": 15,
+  "armorClass": 16,
   "initiative": 2,
-  "hitPoints": 16,
+  "hitPoints": 20,
   "speed": [
     {
-      "name": "Walking",
-      "value": "30 ft"
+      "name": "步行",
+      "value": "30ft"
     }
   ],
   "senses": [
     {
-      "name": "Darkvision",
-      "value": "60 ft"
+      "name": "黑暗视觉",
+      "value": "60ft"
     }
   ],
   "defenses": {
     "resistance": [
-      "Necrotic",
-      "Radiant"
+      "火焰"
     ],
     "immunities": [],
     "vulnerabilities": []
@@ -42,41 +41,31 @@ expression: character.combat
   },
   "actions": [
     {
-      "name": "Attack",
+      "name": "冲刺",
       "usedTime": null,
       "maxUseTime": null
     },
     {
-      "name": "Dash",
+      "name": "撤离",
       "usedTime": null,
       "maxUseTime": null
     },
     {
-      "name": "Disengage",
+      "name": "攻击",
       "usedTime": null,
       "maxUseTime": null
     }
   ],
   "combatActions": [
     {
-      "name": "Dagger",
+      "name": "短弓",
       "hitDc": 4,
-      "damage": "1d4+2"
+      "damage": "1d6+2"
     },
     {
-      "name": "Dagger",
-      "hitDc": 4,
-      "damage": "1d4+2"
-    },
-    {
-      "name": "Ray of Front",
+      "name": "长剑",
       "hitDc": 5,
-      "damage": "1d8"
-    },
-    {
-      "name": "Unarmed Strike",
-      "hitDc": 1,
-      "damage": "0"
+      "damage": "1d8+3"
     }
   ]
 }
