@@ -75,9 +75,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         story_service,
         Arc::clone(&character_sheet_service),
         service_config.config.dm_id.clone(),
-        service_config.config.promopts_folder_path,
+        service_config.config.prompts_folder_path,
         service_config.config.compile_trigger,
         service_config.config.base_url.unwrap(),
+        service_config.config.retry_attempt,
     )?));
 
     let discord_token = service_config

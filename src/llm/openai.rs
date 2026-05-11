@@ -9,11 +9,12 @@ use std::{
 use async_trait::async_trait;
 use rig::{
     client::CompletionClient,
-    completion::{Completion, CompletionError, CompletionResponse, Prompt, PromptError},
+    completion::{Completion, CompletionError, CompletionResponse},
     message::{AssistantContent, Message, ToolCall},
     providers::openai,
     tool::ToolDyn,
 };
+use serenity::http::StatusCode;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -54,6 +55,7 @@ pub struct OpenAi {
     folder_path: String,
     compile_trigger: i64,
     base_url: String,
+    retry_attempt: i64,
 }
 
 impl OpenAi {
@@ -66,6 +68,7 @@ impl OpenAi {
         folder_path: String,
         compile_trigger: i64,
         base_url: String,
+        retry_attempt: i64,
     ) -> Result<Self, LlmError> {
         Ok(Self {
             model: model.to_owned(),
@@ -77,6 +80,7 @@ impl OpenAi {
             compile_trigger,
             tool_service,
             base_url,
+            retry_attempt,
         })
     }
 
@@ -114,14 +118,15 @@ impl OpenAi {
         let mut should_clear_cache = false;
 
         // Initial completion
-        let response = Self::completion_with_retry(|| async {
-            agent
-                .completion(message, memory.history.clone())
-                .await?
-                .send()
-                .await
-        })
-        .await?;
+        let response = self
+            .completion_with_retry(|| async {
+                agent
+                    .completion(message, memory.history.clone())
+                    .await?
+                    .send()
+                    .await
+            })
+            .await?;
 
         memory.history.push(message.into());
         memory.history.push(response.choice.clone().into());
@@ -149,14 +154,15 @@ impl OpenAi {
                 tool_result_text,
             );
 
-            let followup = Self::completion_with_retry(|| async {
-                agent
-                    .completion(message.clone(), memory.history.clone())
-                    .await?
-                    .send()
-                    .await
-            })
-            .await?;
+            let followup = self
+                .completion_with_retry(|| async {
+                    agent
+                        .completion(message.clone(), memory.history.clone())
+                        .await?
+                        .send()
+                        .await
+                })
+                .await?;
 
             memory.history.push(message);
             memory.history.push(followup.choice.clone().into());
@@ -177,6 +183,7 @@ impl OpenAi {
     }
 
     async fn completion_with_retry<T, F, Fut>(
+        &self,
         mut request: F,
     ) -> Result<CompletionResponse<T>, CompletionError>
     where
@@ -189,8 +196,8 @@ impl OpenAi {
 
             match result {
                 Ok(response) => return Ok(response),
-                Err(err) if Self::should_retry_completion(&err, attempt) => {
-                    Self::sleep_before_retry(attempt, &err).await;
+                Err(err) if self.should_retry_completion(&err, attempt) => {
+                    self.sleep_before_retry(attempt, &err).await;
                     attempt += 1;
                 }
                 Err(err) => return Err(err),
@@ -198,48 +205,21 @@ impl OpenAi {
         }
     }
 
-    async fn prompt_with_retry(
-        client: &impl Prompt,
-        message: impl Into<Message> + Clone + Send,
-    ) -> Result<String, PromptError> {
-        let mut attempt = 0;
-        loop {
-            let result = client.prompt(message.clone()).await;
-
-            match result {
-                Ok(response) => return Ok(response),
-                Err(err) if Self::should_retry_prompt(&err, attempt) => {
-                    Self::sleep_before_retry(attempt, &err).await;
-                    attempt += 1;
-                }
-                Err(err) => return Err(err),
-            }
-        }
+    fn should_retry_completion(&self, err: &CompletionError, attempt: usize) -> bool {
+        attempt < self.retry_attempt as usize && self.is_retryable_completion_error(err)
     }
 
-    fn should_retry_completion(err: &CompletionError, attempt: usize) -> bool {
-        attempt < 3 && Self::is_retryable_completion_error(err)
-    }
-
-    fn should_retry_prompt(err: &PromptError, attempt: usize) -> bool {
-        attempt < 3 && Self::is_retryable_prompt_error(err)
-    }
-
-    fn is_retryable_completion_error(err: &CompletionError) -> bool {
+    fn is_retryable_completion_error(&self, err: &CompletionError) -> bool {
         matches!(
             err,
             CompletionError::HttpError(rig::http_client::Error::InvalidStatusCodeWithMessage(
                 status,
                 _,
-            )) if status.as_u16() == 502
+            )) if *status == StatusCode::SERVICE_UNAVAILABLE || *status == StatusCode::GATEWAY_TIMEOUT || *status == StatusCode::BAD_GATEWAY
         )
     }
 
-    fn is_retryable_prompt_error(err: &PromptError) -> bool {
-        matches!(err, PromptError::CompletionError(err) if Self::is_retryable_completion_error(err))
-    }
-
-    async fn sleep_before_retry(attempt: usize, err: &(impl std::fmt::Display + ?Sized)) {
+    async fn sleep_before_retry(&self, attempt: usize, err: &(impl std::fmt::Display + ?Sized)) {
         let delay = Duration::from_millis(500 * 2_u64.pow(attempt as u32));
         warn!(
             attempt = attempt + 1,
@@ -656,7 +636,23 @@ DM的discord ID为{}
             ])
             .build();
 
-        let reply = Self::prompt_with_retry(&client, message).await?;
+        let reply = self
+            .completion_with_retry(async || {
+                let dummy_history: Vec<Message> = vec![];
+                client
+                    .completion(message.clone(), dummy_history)
+                    .await?
+                    .send()
+                    .await
+            })
+            .await?;
+
+        let mut texts = vec![];
+        let mut tool_calls = VecDeque::new();
+
+        self.collect_response(&reply, &mut texts, &mut tool_calls);
+
+        let reply = texts.join("\n");
 
         Ok(reply)
     }
@@ -695,14 +691,29 @@ DM的discord ID为{}",
             })
             .build();
 
-        let reply = Self::prompt_with_retry(
-            &client,
-            format!(
-                "用户Discord ID {}; 用户名 {}: {}",
-                author_id, author_name, message
-            ),
-        )
-        .await?;
+        let reply = self
+            .completion_with_retry(async || {
+                let dummy_history: Vec<Message> = vec![];
+                client
+                    .completion(
+                        format!(
+                            "用户Discord ID {}; 用户名 {}: {}",
+                            author_id, author_name, message
+                        ),
+                        dummy_history,
+                    )
+                    .await?
+                    .send()
+                    .await
+            })
+            .await?;
+
+        let mut texts = vec![];
+        let mut tool_calls = VecDeque::new();
+
+        self.collect_response(&reply, &mut texts, &mut tool_calls);
+
+        let reply = texts.join("\n");
 
         info!(reply = %reply, author_id = %author_id, author_name = %author_name, "Stored new dialogue through LLM tool");
 
@@ -758,7 +769,23 @@ DM的discord ID为{}",
             .preamble(&prompt)
             .build();
 
-        let res = Self::prompt_with_retry(&client, message).await?;
+        let reply = self
+            .completion_with_retry(async || {
+                let dummy_history: Vec<Message> = vec![];
+                client
+                    .completion(message.clone(), dummy_history)
+                    .await?
+                    .send()
+                    .await
+            })
+            .await?;
+
+        let mut texts = vec![];
+        let mut tool_calls = VecDeque::new();
+
+        self.collect_response(&reply, &mut texts, &mut tool_calls);
+
+        let res = texts.join("\n");
 
         self.story_service.insert_new_story(&res).await?;
 
@@ -770,7 +797,7 @@ DM的discord ID为{}",
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashMap, sync::Arc, thread::sleep, time::Duration};
+    use std::{collections::HashMap, fs, sync::Arc, thread::sleep, time::Duration};
 
     use chrono::Utc;
     use insta::assert_json_snapshot;
@@ -780,17 +807,17 @@ mod test {
     use crate::{
         character::{
             entity::{
-                Ability, CharacterSheet,
-                abilities_block::{AbilitiesBlock, AbilityScore},
-                combat::{Action, Combat, CombatAction, Defenses, SavingThrows, Sense, Speed},
+                CharacterSheet,
+                abilities_block::AbilitiesBlock,
+                combat::Combat,
                 identity::{Characteristics, Identity},
-                inventory::{Inventory, Item},
+                inventory::Inventory,
                 meta::Meta,
                 notes::Notes,
-                progression::{ProficianciesTrainings, Progression},
-                skills::{SkillStatus, Skills},
-                spells::{Spell, SpellSlot, Spells},
-                traits::{FeatureTraits, LockedFeatureTraits, Traits},
+                progression::Progression,
+                skills::Skills,
+                spells::Spells,
+                traits::Traits,
             },
             repository::CharacterSheetRepository,
             service::CharacterSheetService,
@@ -870,6 +897,7 @@ mod test {
                 compile_trigger: 4,
                 tool_service,
                 base_url: "https://api.moxiuren.org/v1/".to_owned(),
+                retry_attempt: 20,
             },
             pool,
             db_name,
@@ -877,787 +905,10 @@ mod test {
         ))
     }
 
-    fn test_character() -> CharacterSheet {
-        CharacterSheet {
-            meta: Meta {
-                discord_id: "400114655500042240".to_owned(),
-                location: "Tavern".to_owned(),
-                story_summary: Some("Just started to join the game".to_owned()),
-                extra_creatures: vec![],
-                dead: false,
-                performing_action: Some("Drinking".to_owned()),
-                action_end_time: Some("Harptos 24 Mar 1555 12:35PM".to_owned()),
-            },
-            identity: Identity {
-                character_name: "真珠".to_owned(),
-                species: "Aasimar".to_owned(),
-                sub_species: None,
-                class: "Sorcerer".to_owned(),
-                sub_class: Some("Draconic Bloodline - Gold".to_owned()),
-                characteristics: Characteristics {
-                    background: "Noble".to_owned(),
-                    background_feature: "Position of Privilege".to_owned(),
-                    background_feature_description: "Thanks to your noble birth, \
-                        people are inclined to think the best of you. \
-                        You are welcome in high society, \
-                        and people assume you have the right \
-                        to be wherever you are. \
-                        The common folk make every effort to accommodate you and \
-                        avoid your displeasure, and other people of high birth \
-                        treat you as a member of the same social sphere. \
-                        You can secure an audience with a local noble \
-                        if you need to."
-                        .to_owned(),
-                    alignment: "Lawful neutral".to_owned(),
-                    gender: "Female".to_owned(),
-                    eyes: "Blue".to_owned(),
-                    size: "Medium".to_owned(),
-                    height: "5'7″".to_owned(),
-                    faith: "Amber Lord".to_owned(),
-                    hair: "Blonde".to_owned(),
-                    skin: "White".to_owned(),
-                    age: 28,
-                    weight: "104 lbs.".to_owned(),
-                    personality_traits: "My eloquent flattery makes everyone \
-                        I talk to feel like the most wonderful and important \
-                        person in the world."
-                        .to_owned(),
-                    ideals: "Responsibility. It is my duty to respect \
-                        the authority of those above me, just as those below \
-                        me must respect mine. (Lawful)"
-                        .to_owned(),
-                    bonds: "The common folk must see me as a hero of the people.".to_owned(),
-                    flaws: "I too often hear veiled insults and threats \
-                        in every word addressed to me, and I'm quick to anger."
-                        .to_owned(),
-                    appearance_trait: vec![],
-                },
-            },
-            progression: Progression {
-                level: 2,
-                xp: 330,
-                total_hit_dice: "2d6".to_owned(),
-                max_hp: 16,
-                proficiencies: ProficianciesTrainings {
-                    proficiency_bonus: 2,
-                    armor: vec![],
-                    weapons: vec![
-                        "Crossbow".to_owned(),
-                        "Light".to_owned(),
-                        "Dagger".to_owned(),
-                        "Dart".to_owned(),
-                        "Quarterstaff".to_owned(),
-                        "Sling".to_owned(),
-                    ],
-                    tools: vec![
-                        "Dragonchess Set".to_owned(),
-                        "Painter's Supplies".to_owned(),
-                    ],
-                    languages: vec![
-                        "Celestial".to_owned(),
-                        "Common".to_owned(),
-                        "Draconic".to_owned(),
-                    ],
-                },
-            },
-            combat: Combat {
-                armor_class: 15,
-                initiative: 2,
-                hit_points: 16,
-                speed: vec![Speed {
-                    name: "Walking".to_owned(),
-                    value: "30 ft".to_owned(),
-                }],
-                senses: vec![Sense {
-                    name: "Darkvision".to_owned(),
-                    value: "60 ft".to_owned(),
-                }],
-                defenses: Defenses {
-                    resistance: vec!["Necrotic".to_owned(), "Radiant".to_owned()],
-                    immunities: vec![],
-                    vulnerabilities: vec![],
-                },
-                conditions: vec![],
-                exhaustion_level: 0,
-                saving_throws: SavingThrows {
-                    proficiency: vec![Ability::Constitution, Ability::Charisma],
-                    constitution_saving_throws: 0,
-                    strength_saving_throws: 0,
-                    intelligence_saving_throws: 0,
-                    dexterity_saving_throws: 0,
-                    wisdom_saving_throws: 0,
-                    charisma_saving_throws: 0,
-                },
-                actions: vec![
-                    Action {
-                        name: "Attack".to_owned(),
-                        used_time: None,
-                        max_use_time: None,
-                    },
-                    Action {
-                        name: "Dash".to_owned(),
-                        used_time: None,
-                        max_use_time: None,
-                    },
-                    Action {
-                        name: "Disengage".to_owned(),
-                        used_time: None,
-                        max_use_time: None,
-                    },
-                ],
-                combat_actions: vec![
-                    CombatAction {
-                        name: "Dagger".to_owned(),
-                        hit_dc: Some(4),
-                        damage: "1d4+2".to_owned(),
-                    },
-                    CombatAction {
-                        name: "Dagger".to_owned(),
-                        hit_dc: Some(4),
-                        damage: "1d4+2".to_owned(),
-                    },
-                    CombatAction {
-                        name: "Ray of Front".to_owned(),
-                        hit_dc: Some(5),
-                        damage: "1d8".to_owned(),
-                    },
-                    CombatAction {
-                        name: "Unarmed Strike".to_owned(),
-                        hit_dc: Some(1),
-                        damage: "0".to_owned(),
-                    },
-                ],
-            },
-            abilities_block: AbilitiesBlock {
-                strength: AbilityScore {
-                    base: 8,
-                    modifier: 0,
-                },
-                dexterity: AbilityScore {
-                    base: 14,
-                    modifier: 0,
-                },
-                constitution: AbilityScore {
-                    base: 14,
-                    modifier: 0,
-                },
-                intelligence: AbilityScore {
-                    base: 10,
-                    modifier: 0,
-                },
-                wisdom: AbilityScore {
-                    base: 11,
-                    modifier: 0,
-                },
-                charisma: AbilityScore {
-                    base: 17,
-                    modifier: 0,
-                },
-            },
-            skills: Skills {
-                acrobatics: SkillStatus {
-                    prof: false,
-                    bonus: 2,
-                    modifier: Ability::Dexterity,
-                    passive: 0,
-                },
-                animal_handling: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Wisdom,
-                    passive: 0,
-                },
-                arcana: SkillStatus {
-                    prof: true,
-                    bonus: 2,
-                    modifier: Ability::Intelligence,
-                    passive: 0,
-                },
-                athletics: SkillStatus {
-                    prof: false,
-                    bonus: -1,
-                    modifier: Ability::Strength,
-                    passive: 0,
-                },
-                deception: SkillStatus {
-                    prof: false,
-                    bonus: 3,
-                    modifier: Ability::Charisma,
-                    passive: 0,
-                },
-                history: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Intelligence,
-                    passive: 0,
-                },
-                insight: SkillStatus {
-                    prof: true,
-                    bonus: 2,
-                    modifier: Ability::Wisdom,
-                    passive: 0,
-                },
-                intimidation: SkillStatus {
-                    prof: true,
-                    bonus: 5,
-                    modifier: Ability::Charisma,
-                    passive: 0,
-                },
-                investigation: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Intelligence,
-                    passive: 0,
-                },
-                medicine: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Wisdom,
-                    passive: 0,
-                },
-                nature: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Intelligence,
-                    passive: 0,
-                },
-                perception: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Wisdom,
-                    passive: 0,
-                },
-                performance: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Charisma,
-                    passive: 0,
-                },
-                persuasion: SkillStatus {
-                    prof: true,
-                    bonus: 0,
-                    modifier: Ability::Charisma,
-                    passive: 0,
-                },
-                religion: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Intelligence,
-                    passive: 0,
-                },
-                sleight_of_hand: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Dexterity,
-                    passive: 0,
-                },
-                stealth: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Dexterity,
-                    passive: 0,
-                },
-                survival: SkillStatus {
-                    prof: false,
-                    bonus: 0,
-                    modifier: Ability::Wisdom,
-                    passive: 0,
-                },
-            },
-            magic: Spells {
-                    spells: vec![
-                        Spell {
-                            name: "Light".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "Touch".to_owned(),
-                            hit_dc: Some(13),
-                            effect: "Creation".to_owned(),
-                        },
-                        Spell {
-                            name: "Message".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "120 ft.".to_owned(),
-                            hit_dc: None,
-                            effect: "Communication".to_owned(),
-                        },
-                        Spell {
-                            name: "Minor Illusion".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "30 ft.".to_owned(),
-                            hit_dc: None,
-                            effect: "Control".to_owned(),
-                        },
-                        Spell {
-                            name: "Prestidigitation".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "10 ft.".to_owned(),
-                            hit_dc: None,
-                            effect: "Utility".to_owned(),
-                        },
-                        Spell {
-                            name: "Ray of Frost".to_owned(),
-                            level: 0,
-                            cast_time: "1 action".to_owned(),
-                            range: "60 ft.".to_owned(),
-                            hit_dc: Some(5),
-                            effect: "1d8".to_owned(),
-                        },
-                        Spell {
-                            name: "Magic Missile".to_owned(),
-                            level: 1,
-                            cast_time: "1 action".to_owned(),
-                            range: "120 ft.".to_owned(),
-                            hit_dc: None,
-                            effect: "1d4+1".to_owned(),
-                        },
-                        Spell {
-                            name: "Shield".to_owned(),
-                            level: 1,
-                            cast_time: "1 reaction".to_owned(),
-                            range: "Self".to_owned(),
-                            hit_dc: None,
-                            effect: "Warding".to_owned(),
-                        },
-                        Spell {
-                            name: "Thunderwave".to_owned(),
-                            level: 1,
-                            cast_time: "1 action".to_owned(),
-                            range: "Self".to_owned(),
-                            hit_dc: Some(13),
-                            effect: "2d8".to_owned(),
-                        },
-                    ],
-                    spell_slots: vec![SpellSlot {
-                        level: 1,
-                        slot: 3,
-                        used: 0,
-                    }],
-                    ability_type: Ability::Charisma,
-                    ability_modifier: 3,
-                    spell_attack: 5,
-                    save_dc: 13,
-            },
-            inventory: Inventory {
-                items: vec![
-                    Item {
-                        name: "Clothes, Fine".to_owned(),
-                        weight: 6,
-                        quantity: Some(1),
-                        cost_gp: 15,
-                        equiped: false,
-                    },
-                    Item {
-                        name: "Dagger".to_owned(),
-                        weight: 1,
-                        quantity: None,
-                        cost_gp: 2,
-                        equiped: true,
-                    },
-                ],
-            },
-            traits: Traits {
-                unlocked_features_and_traits: vec![
-                                    FeatureTraits {
-                                        name: "HIT POINTS".to_owned(),
-                                        description: "Hit Dice: 1d6 per Sorcerer level
-                Hit Points at Level 1: 6 + your Constitution modifier
-                Hit Points per Later Level: 1d6 (or 4) + your Constitution modifier"
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "PROFICIENCIES".to_owned(),
-                                        description: "Saving Throws: Constitution, Charisma
-                Skills (Choose 2): Arcana, Deception, Insight, Intimidation, Persuasion, Religion
-                Weapons: Simple Weapons
-                Tools: None".to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "ARMOR TRAINING".to_owned(),
-                                        description: "None".to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "STARTING EQUIPMENT".to_owned(),
-                                        description: "As a level 1 character, you start with the following equipment, or you can forgo it and spend 50 GP on equipment of your choice.
-
-                Arcane Focus (Crystal)
-                Dagger (x2)
-                Dungeoneer’s Pack
-                Spear
-                28 GP".to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "SORCERER CLASS FEATURES".to_owned(),
-                                        description: "| Level | Proficiency Bonus | Sorcery Points | Features | Cantrips Known | Spells Known | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |
-                |-------|-------------------|----------------|----------|----------------|--------------|-----|-----|-----|-----|-----|-----|-----|-----|-----|
-                | 1st  | +2 | —  | Spellcasting, Sorcerous Origin | 4 | 2  | 2 | — | — | — | — | — | — | — | — |
-                | 2nd  | +2 | 2  | Font of Magic | 4 | 3  | 3 | — | — | — | — | — | — | — | — |
-                | 3rd  | +2 | 3  | Metamagic | 4 | 4  | 4 | 2 | — | — | — | — | — | — | — |
-                | 4th  | +2 | 4  | Ability Score Improvement | 5 | 5  | 4 | 3 | — | — | — | — | — | — | — |
-                | 5th  | +3 | 5  | — | 5 | 6  | 4 | 3 | 2 | — | — | — | — | — | — |
-                | 6th  | +3 | 6  | Sorcerous Origin Feature | 5 | 7  | 4 | 3 | 3 | — | — | — | — | — | — |
-                | 7th  | +3 | 7  | — | 5 | 8  | 4 | 3 | 3 | 1 | — | — | — | — | — |
-                | 8th  | +3 | 8  | Ability Score Improvement | 5 | 9  | 4 | 3 | 3 | 2 | — | — | — | — | — |
-                | 9th  | +4 | 9  | — | 5 | 10 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |
-                | 10th | +4 | 10 | Metamagic | 6 | 11 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |
-                | 11th | +4 | 11 | — | 6 | 12 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
-                | 12th | +4 | 12 | Ability Score Improvement | 6 | 12 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |
-                | 13th | +5 | 13 | — | 6 | 13 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
-                | 14th | +5 | 14 | Sorcerous Origin Feature | 6 | 13 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |
-                | 15th | +5 | 15 | — | 6 | 14 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
-                | 16th | +5 | 16 | Ability Score Improvement | 6 | 14 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |
-                | 17th | +6 | 17 | Metamagic | 6 | 15 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |
-                | 18th | +6 | 18 | Sorcerous Origin Feature | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |
-                | 19th | +6 | 19 | Ability Score Improvement | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |
-                | 20th | +6 | 20 | Sorcerous Restoration | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |".to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "INNATE SORCERY".to_owned(),
-                                        description: "An event in your past left an indelible mark on you, infusing you with a simmering magic. As a Bonus Action, you can unleash that magic for 1 minute, during which you gain the following benefits:
-
-                The spell save DC of your Sorcerer spells increases by 1.
-                You have Advantage on the attack rolls of Sorcerer spells you cast.
-                You can use this feature twice, and you regain all expended uses of it when you finish a Long Rest.".to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(2),
-                                    },
-                                    FeatureTraits {
-                                        name: "SPELLCASTING".to_owned(),
-                                        description: "Drawing from your innate magic, you can cast spells. See the Player’s Handbook for rules on spellcasting. The information below details how you use those rules as a Sorcerer.
-
-                Cantrips. You know four cantrips of your choice from the Sorcerer spell list. Rather than choosing, you may start with Light, Prestidigitation, Shocking Grasp, and Sorcerous Burst. Whenever you gain a Sorcerer level, you can replace one of your cantrips from this feature with another Sorcerer cantrip of your choice. When you reach levels 4 and 10 in this class, you learn another Sorcerer cantrip of your choice, as shown in the Cantrips column of the Sorcerer table.
-                Spell Slots. The Sorcerer table shows how many spell slots you have to cast your spells of level 1 and higher. To cast one of these spells, you must expend a slot of the spell’s level or higher. You regain all expended spell slots when you finish a Long Rest. Prepared Spells of Level 1+. You prepare the list of spells of level 1 and higher that are available for you to cast with this feature. To start, choose two level 1 spells from the Sorcerer spell list. Rather than choosing, you may start with Burning Hands and Detect Magic. The number of spells on your list also increases as you gain Sorcerer levels, as shown in the Prepared Spells column of the Sorcerer table. Whenever that number increases, choose additional spells from the Sorcerer spell list until the number of spells on your list matches the number on the table. The chosen spells must be of a level for which you have spell slots. For example, if you’re a level 3 Sorcerer, your list of prepared spells can include six Sorcerer spells of level 1 or 2 in any combination. If another Sorcerer feature gives spells that you always have prepared, those spells don’t count against the number of spells on the list you prepare with this Spellcasting feature, but those spells otherwise follow the rules in this feature.
-                Changing Your Prepared Spells. Whenever you gain a Sorcerer level, you can replace one spell on your list with another Sorcerer spell for which you have spell slots.
-                Spellcasting Ability. Charisma is your spellcasting ability for the spells you cast with your Sorcerer features.
-                Spellcasting Focus. You can use an Arcane Focus as a Spellcasting Focus for the spells you cast with your Sorcerer features."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "FONT OF MAGIC".to_owned(),
-                                        description: "You can tap into the wellspring of magic within yourself. This wellspring is represented by Sorcery Points, which allow you to create a variety of magical effects. You have 2 Sorcery Points, and you gain more as you reach higher levels, as shown in the Sorcery Points column of the Sorcerer table. You can never have more Sorcery Points than the number shown on the table for your level. You regain all spent Sorcery Points when you finish a Long Rest. You can use your Sorcery Points to fuel the options below, along with other features, such as Metamagic, that use those points.
-
-                Converting Spell Slots to Sorcery Points. You can expend a spell slot to gain a number of Sorcery Points equal to the slot’s level (no action required).
-                Creating Spell Slots. As a Bonus Action, you can transform unexpended Sorcery Points into one spell slot. The Creating Spell Slots table shows the cost of creating a spell slot of a given level, and it lists the minimum Sorcerer level you must be to create a slot. You can create a spell slot no higher in level than 5. Any spell slot you create with this feature vanishes when you finish a Long Rest.
-
-                CREATING SPELL SLOTS:
-                | Spell Slot Level | Sorcery Point Cost | Min. Sorcerer Level |
-                |------------------|--------------------|---------------------|
-                | 1 | 2 | 2 |
-                | 2 | 3 | 3 |
-                | 3 | 5 | 5 |
-                | 4 | 6 | 7 |
-                | 5 | 7 | 9 |"
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(2),
-                                    },
-                                    FeatureTraits {
-                                        name: "METAMAGIC".to_owned(),
-                                        description: "You gain two Metamagic options of your choice from the Metamagic Options. You use the chosen options to temporarily modify spells you cast. To use an option, you must spend the number of Sorcery Points that it costs. You can use only one Metamagic option on a spell when you cast it, unless otherwise noted in one of those options. Whenever you gain a Sorcerer level, you can replace one of your Metamagic options with one you don’t know. You gain two more options at Sorcerer level 10 and two more at Sorcerer level 17.
-
-                METAMAGIC OPTIONS
-                The following options are available to your Metamagic features. The options are presented in alphabetical order.
-
-                EMPOWERED SPELL
-                Cost: 1 Sorcery Point
-
-                When you roll damage for a spell, you can spend 1 Sorcery Point to reroll a number of the damage dice up to your Charisma modifier (minimum of one), and you must use the new rolls. You can use Empowered Spell even if you have already used a different Metamagic option during the casting of the spell.
-
-                QUICKENED SPELL
-                Cost: 2 Sorcery Points
-
-                When you cast a spell that has a casting time of an action, you can spend 2 Sorcery Points to change the casting time to a Bonus Action for this casting. You can’t modify a spell in this way if you’ve already cast a spell of level 1 or higher on the current turn, nor can you cast a spell of level 1 or higher on this turn after modifying a spell in this way.
-"
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "Aasimar Traits".to_owned(),
-                                        description: "Creature Type: Humanoid
-Size: Medium (about 4–7 feet tall) or Small (about 2-4 feet tall), chosen when you select this species
-Speed: 30 feet
-Life Span: 160 years on average"
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "Celestial Resistance".to_owned(),
-                                        description: "You have resistance to Necrotic damage and Radiant damage."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "Darkvision".to_owned(),
-                                        description: "Blessed with a radiant soul, your vision can easily cut through darkness. You have Darkvision with a range of 60 feet."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                                    FeatureTraits {
-                                        name: "Healing Hands".to_owned(),
-                                        description: "As a Magic action, you can touch a creature and roll a number of d4s equal to your Proficiency Bonus. The creature regains a number of Hit Points equal to the total rolled. Once you use this trait you can’t use it again until you finish a Long Rest."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(1),
-                                    },
-                                    FeatureTraits {
-                                        name: "Light Bearer".to_owned(),
-                                        description: "You know the Light cantrip. Charisma is your spellcasting ability for it."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(1),
-                                    },
-                                ],
-                locked_features_and_traits: vec![LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "SORCERER SUBCLASS".to_owned(),
-                                        description: "You gain a Sorcerer subclass of your choice:
-
-Aberrant Sorcery
-Clockwork Sorcery
-Draconic Sorcery
-Wild Magic Sorcery
-Divine Soul Sorcery (Non-Playtest)
-Shadow Sorcery (Non-Playtest)
-Storm Sorcery (Non-Playtest)
-
-Subclasses are detailed after this class’s description. A subclass is a specialization that grants you special features at certain Sorcerer levels. For the rest of your career, you gain each of your subclass’s features that are of your Sorcerer level and lower. There are non-playtest subclasses that can be used, please check with your DM before using one."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                    unlock_level: Some(3),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "ABILITY SCORE IMPROVEMENT".to_owned(),
-                                        description: "You gain the Ability Score Improvement feat or another feat of your choice for which you qualify. As shown on the Sorcerer table, you gain this feature again at levels 8, 12, 16.
-                                        
-General Feat (Prerequisite: Level 4+)
-
-Increase one ability score of your choice by 2, or increase two ability scores of your choice by 1. This feat can’t increase an ability score above 20.
-
-Repeatable. You can take this feat more than once."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                    unlock_level: Some(4),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "SORCEROUS RESTORATION".to_owned(),
-                                        description: "When you finish a Short Rest, you can regain expended Sorcery Points, but no more than a number equal to half your Sorcerer level (round down). Once you use this feature, you can't do so again until you finish a Long Rest."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(1),
-                                    },
-                    unlock_level: Some(5),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "SORCERY INCARNATE".to_owned(),
-                                        description: "If you have no uses of Innate Sorcery left, you can use it if you spend 2 Sorcery Points when you take the Bonus Action to activate it. In addition, while your Innate Sorcery feature is active, you can use up to two of your Metamagic Options on each spell you cast."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                    unlock_level: Some(5),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "EPIC BOON".to_owned(),
-                                        description: "You gain an Epic Boon feat or another feat of your choice for which you qualify. Boon of Fate is recommended.
-                                        
-Boon of Combat Prowess
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.
-
-Peerless Aim. When you miss with an attack roll, you can hit instead. Once you use this benefit, you can’t use it again until the start of your next turn.
-
-Boon of Dimensional Travel
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.
-
-Blink Steps. Immediately after you take the Attack action or the Magic action, you can teleport up to 30 feet to an unoccupied space you can see.
-
-Boon of Fate
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.
-
-Improve Fate. When you or another creature within 60 feet of you succeeds on or fails a D20 Test, you can roll 2d4 and apply the total rolled as a bonus or penalty to the d20 roll. Once you use this benefit, you can’t use it again until you roll Initiative or finish a Short or Long Rest.
-
-Boon of Irresistible Offense
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase your Strength or Dexterity score by 1, to a maximum of 30.
-
-Overcome Defenses. The Bludgeoning, Piercing, and Slashing damage you deal always ignores Resistance.
-
-Overwhelming Strike. When you roll a 20 on the d20 for an attack roll, you can deal extra damage to the target equal to the ability score increased by this feat. The extra damage’s type is the same as the attack’s type.
-
-Boon of the Night Spirit
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.
-
-Merge with Shadows. While within Dim Light or Darkness, you can give yourself the Invisible condition as a Bonus Action. The condition ends on you immediately after you take an action, a Bonus Action, or a Reaction.
-
-Shadowy Form. While within Dim Light or Darkness, you have Resistance to all damage except Psychic and Radiant.
-
-Boon of Spell Recall
-Epic Boon Feat (Prerequisite: Level 19+, Spellcasting Feature)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 30.
-
-Free Casting. Whenever you cast a spell with a level 1–4 spell slot, roll 1d4. If the number you roll is the same as the slot’s level, the slot isn’t expended.
-
-Boon of Truesight
-Epic Boon Feat (Prerequisite: Level 19+)
-
-You gain the following benefits.
-
-Ability Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.
-
-Truesight. You have Truesight with a range of 60 feet."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                    unlock_level: Some(19),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "ARCANE APOTHEOSIS".to_owned(),
-                                        description: "While your Innate Sorcery feature is active, you can use one Metamagic Option on each of your turns without expending Sorcery Points on it"
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: None,
-                                        max_charges: None,
-                                    },
-                    unlock_level: Some(20),
-                    unlock_condition: None,
-                }, LockedFeatureTraits {
-                    feature: FeatureTraits {
-                                        name: "Celestial Revelation".to_owned(),
-                                        description: "When you reach character 3rd level, you can transform as a Bonus Action using one of the options below (choose the option each time you transform). The transformation lasts for 1 minute or until you end it (no action required). Once you transform, you can't do so again until you finish a Long Rest. Once on each of your turns before the transformation ends, you can deal extra damage to one target when you deal damage to it with an attack or spell. The extra damage equals your Proficiency Bonus, and the extra damage's type is either Necrotic for Necrotic Shroud or Radiant for Heavenly Wings and Inner Radiance.
-Heavenly Wings. Two spectral wings sprout from your back temporarily. Until your transformation ends, you have a Flying Speed equal to your Speed.
-Inner Radiance. Searing light temporarily radiates from your eyes and mouth. For the duration, you shed Bright Light in a 10-foot radius and Dim Light for an additional 10 feet, and at the end of each of your turns, each creature within 10 feet of you takes Radiant damage equal to your Proficiency Bonus.
-Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings sprout from your back temporarily. Creatures other than your allies within 10 feet of you must each succeed on a Charisma saving throw (DC 8 + your proficiency bonus + your Charisma modifier) or have the Frightened condition until the end of your next turn."
-                                            .to_owned(),
-                                        duration: None,
-                                        trigger: None,
-                                        cooldown: None,
-                                        used_charges: Some(0),
-                                        max_charges: Some(1),
-                                    },
-                    unlock_level: Some(3),
-                    unlock_condition: None,
-                }],
-            },
-            notes: Notes {
-                organizations: None,
-                allies: None,
-                enemies: None,
-                backstory: "Pearl is a rank P45 senior manager of the Strategic Investment \
-            Department in the Interastral Peace Corporation, a member of the Ten Stonehearts, \
-            the leader of Pearluxe Corp, and the CEO of Planarcadia."
-                    .to_owned(),
-                other: None,
-            },
-        }
+    fn test_character() -> Result<CharacterSheet, Box<dyn std::error::Error>> {
+        let character_json = fs::File::open("./src/llm/test_character/test_character.json")?;
+        let character: CharacterSheet = serde_json::from_reader(character_json)?;
+        Ok(character)
     }
 
     #[tokio::test]
@@ -1820,7 +1071,7 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
         let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
         let message_sender = MockMessageSender;
         let discord_id = "1483098634601107490";
-        let mut character = test_character();
+        let mut character = test_character()?;
         character.meta.discord_id = discord_id.to_owned();
         character_sheet_service.upsert_character(character).await?;
 
@@ -1937,7 +1188,7 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
         let (mut gemini_service, _pool, _, character_sheet_service) = service_setup().await?;
         let message_sender = MockMessageSender;
         let discord_id = "1483098634601107493";
-        let mut character = test_character();
+        let mut character = test_character()?;
         character.meta.discord_id = discord_id.to_owned();
         character_sheet_service.upsert_character(character).await?;
 
@@ -2119,7 +1370,7 @@ Necrotic Shroud. Your eyes turn into pools of darkness and flightless wings spro
 
         此外，作为规则审计员，提醒DM注意：在《龙与地下城》规则中，**“斩杀”**（即直接导致角色死亡）通常涉及复杂的战斗判定与伤害计算。请确保在叙述该行为时，已遵循战斗规则中的攻击检定、伤害投掷及死亡判定程序。");
 
-        let test_character = test_character();
+        let test_character = test_character()?;
 
         character_sheet_service
             .upsert_character(test_character)

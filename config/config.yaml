@@ -28,4 +28,6 @@ buffer-check-interval-seconds: 2
 
 compile-trigger: 10
 
-promopts-folder-path: "/app/prompts"
+prompts-folder-path: "/app/prompts"
+
+retry-attempt: 20

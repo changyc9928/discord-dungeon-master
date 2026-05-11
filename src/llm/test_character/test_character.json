@@ -1,0 +1,592 @@
+{
+    "meta": {
+        "discordId": "400114655500042240",
+        "location": "Tavern",
+        "storySummary": "Just started to join the game",
+        "extraCreatures": [],
+        "dead": false,
+        "performingAction": "Drinking",
+        "actionEndTime": "Harptos 24 Mar 1555 12:35PM"
+    },
+    "identity": {
+        "characterName": "真珠",
+        "species": "Aasimar",
+        "subSpecies": null,
+        "class": "Sorcerer",
+        "subClass": "Draconic Bloodline - Gold",
+        "characteristics": {
+            "background": "Noble",
+            "backgroundFeature": "Position of Privilege",
+            "backgroundFeatureDescription": "Thanks to your noble birth, people are inclined to think the best of you. You are welcome in high society, and people assume you have the right to be wherever you are. The common folk make every effort to accommodate you and avoid your displeasure, and other people of high birth treat you as a member of the same social sphere. You can secure an audience with a local noble if you need to.",
+            "alignment": "Lawful neutral",
+            "gender": "Female",
+            "eyes": "Blue",
+            "size": "Medium",
+            "height": "5'7″",
+            "faith": "Amber Lord",
+            "hair": "Blonde",
+            "skin": "White",
+            "age": 28,
+            "weight": "104 lbs.",
+            "personalityTraits": "My eloquent flattery makes everyone I talk to feel like the most wonderful and important person in the world.",
+            "ideals": "Responsibility. It is my duty to respect the authority of those above me, just as those below me must respect mine. (Lawful)",
+            "bonds": "The common folk must see me as a hero of the people.",
+            "flaws": "I too often hear veiled insults and threats in every word addressed to me, and I'm quick to anger.",
+            "appearanceTrait": []
+        }
+    },
+    "progression": {
+        "level": 2,
+        "xp": 330,
+        "totalHitDice": "2d6",
+        "maxHp": 16,
+        "proficiencies": {
+            "proficiencyBonus": 2,
+            "armor": [],
+            "weapons": [
+                "Crossbow",
+                "Light",
+                "Dagger",
+                "Dart",
+                "Quarterstaff",
+                "Sling"
+            ],
+            "tools": [
+                "Dragonchess Set",
+                "Painter's Supplies"
+            ],
+            "languages": [
+                "Celestial",
+                "Common",
+                "Draconic"
+            ]
+        }
+    },
+    "combat": {
+        "armorClass": 15,
+        "initiative": 2,
+        "hitPoints": 16,
+        "speed": [
+            {
+                "name": "Walking",
+                "value": "30 ft"
+            }
+        ],
+        "senses": [
+            {
+                "name": "Darkvision",
+                "value": "60 ft"
+            }
+        ],
+        "defenses": {
+            "resistance": [
+                "Necrotic",
+                "Radiant"
+            ],
+            "immunities": [],
+            "vulnerabilities": []
+        },
+        "conditions": [],
+        "exhaustionLevel": 0,
+        "savingThrows": {
+            "proficiency": [
+                "CONSTITUTION",
+                "CHARISMA"
+            ],
+            "strengthSavingThrows": 0,
+            "intelligenceSavingThrows": 0,
+            "dexteritySavingThrows": 0,
+            "wisdomSavingThrows": 0,
+            "constitutionSavingThrows": 0,
+            "charismaSavingThrows": 0
+        },
+        "actions": [
+            {
+                "name": "Attack",
+                "usedTime": null,
+                "maxUseTime": null
+            },
+            {
+                "name": "Dash",
+                "usedTime": null,
+                "maxUseTime": null
+            },
+            {
+                "name": "Disengage",
+                "usedTime": null,
+                "maxUseTime": null
+            }
+        ],
+        "combatActions": [
+            {
+                "name": "Dagger",
+                "hitDc": 4,
+                "damage": "1d4+2"
+            },
+            {
+                "name": "Dagger",
+                "hitDc": 4,
+                "damage": "1d4+2"
+            },
+            {
+                "name": "Ray of Front",
+                "hitDc": 5,
+                "damage": "1d8"
+            },
+            {
+                "name": "Unarmed Strike",
+                "hitDc": 1,
+                "damage": "0"
+            }
+        ]
+    },
+    "abilitiesBlock": {
+        "strength": {
+            "base": 8,
+            "modifier": 0
+        },
+        "intelligence": {
+            "base": 10,
+            "modifier": 0
+        },
+        "dexterity": {
+            "base": 14,
+            "modifier": 0
+        },
+        "constitution": {
+            "base": 14,
+            "modifier": 0
+        },
+        "charisma": {
+            "base": 17,
+            "modifier": 0
+        },
+        "wisdom": {
+            "base": 11,
+            "modifier": 0
+        }
+    },
+    "skills": {
+        "acrobatics": {
+            "prof": false,
+            "bonus": 2,
+            "modifier": "DEXTERITY",
+            "passive": 0
+        },
+        "animalHandling": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "WISDOM",
+            "passive": 0
+        },
+        "arcana": {
+            "prof": true,
+            "bonus": 2,
+            "modifier": "INTELLIGENCE",
+            "passive": 0
+        },
+        "athletics": {
+            "prof": false,
+            "bonus": -1,
+            "modifier": "STRENGTH",
+            "passive": 0
+        },
+        "deception": {
+            "prof": false,
+            "bonus": 3,
+            "modifier": "CHARISMA",
+            "passive": 0
+        },
+        "history": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "INTELLIGENCE",
+            "passive": 0
+        },
+        "insight": {
+            "prof": true,
+            "bonus": 2,
+            "modifier": "WISDOM",
+            "passive": 0
+        },
+        "intimidation": {
+            "prof": true,
+            "bonus": 5,
+            "modifier": "CHARISMA",
+            "passive": 0
+        },
+        "investigation": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "INTELLIGENCE",
+            "passive": 0
+        },
+        "medicine": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "WISDOM",
+            "passive": 0
+        },
+        "nature": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "INTELLIGENCE",
+            "passive": 0
+        },
+        "perception": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "WISDOM",
+            "passive": 0
+        },
+        "performance": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "CHARISMA",
+            "passive": 0
+        },
+        "persuasion": {
+            "prof": true,
+            "bonus": 0,
+            "modifier": "CHARISMA",
+            "passive": 0
+        },
+        "religion": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "INTELLIGENCE",
+            "passive": 0
+        },
+        "sleightOfHand": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "DEXTERITY",
+            "passive": 0
+        },
+        "stealth": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "DEXTERITY",
+            "passive": 0
+        },
+        "survival": {
+            "prof": false,
+            "bonus": 0,
+            "modifier": "WISDOM",
+            "passive": 0
+        }
+    },
+    "magic": {
+        "spells": [
+            {
+                "name": "Light",
+                "level": 0,
+                "castTime": "1 action",
+                "range": "Touch",
+                "hitDc": 13,
+                "effect": "Creation"
+            },
+            {
+                "name": "Message",
+                "level": 0,
+                "castTime": "1 action",
+                "range": "120 ft.",
+                "hitDc": null,
+                "effect": "Communication"
+            },
+            {
+                "name": "Minor Illusion",
+                "level": 0,
+                "castTime": "1 action",
+                "range": "30 ft.",
+                "hitDc": null,
+                "effect": "Control"
+            },
+            {
+                "name": "Prestidigitation",
+                "level": 0,
+                "castTime": "1 action",
+                "range": "10 ft.",
+                "hitDc": null,
+                "effect": "Utility"
+            },
+            {
+                "name": "Ray of Frost",
+                "level": 0,
+                "castTime": "1 action",
+                "range": "60 ft.",
+                "hitDc": 5,
+                "effect": "1d8"
+            },
+            {
+                "name": "Magic Missile",
+                "level": 1,
+                "castTime": "1 action",
+                "range": "120 ft.",
+                "hitDc": null,
+                "effect": "1d4+1"
+            },
+            {
+                "name": "Shield",
+                "level": 1,
+                "castTime": "1 reaction",
+                "range": "Self",
+                "hitDc": null,
+                "effect": "Warding"
+            },
+            {
+                "name": "Thunderwave",
+                "level": 1,
+                "castTime": "1 action",
+                "range": "Self",
+                "hitDc": 13,
+                "effect": "2d8"
+            }
+        ],
+        "spellSlots": [
+            {
+                "level": 1,
+                "slot": 3,
+                "used": 0
+            }
+        ],
+        "abilityType": "CHARISMA",
+        "abilityModifier": 3,
+        "spellAttack": 5,
+        "saveDc": 13
+    },
+    "inventory": {
+        "items": [
+            {
+                "name": "Clothes, Fine",
+                "weight": 6,
+                "quantity": 1,
+                "costGp": 15,
+                "equiped": false
+            },
+            {
+                "name": "Dagger",
+                "weight": 1,
+                "quantity": null,
+                "costGp": 2,
+                "equiped": true
+            }
+        ]
+    },
+    "traits": {
+        "unlockedFeaturesAndTraits": [
+            {
+                "name": "HIT POINTS",
+                "description": "Hit Dice: 1d6 per Sorcerer level\n                Hit Points at Level 1: 6 + your Constitution modifier\n                Hit Points per Later Level: 1d6 (or 4) + your Constitution modifier",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "PROFICIENCIES",
+                "description": "Saving Throws: Constitution, Charisma\n                Skills (Choose 2): Arcana, Deception, Insight, Intimidation, Persuasion, Religion\n                Weapons: Simple Weapons\n                Tools: None",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "ARMOR TRAINING",
+                "description": "None",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "STARTING EQUIPMENT",
+                "description": "As a level 1 character, you start with the following equipment, or you can forgo it and spend 50 GP on equipment of your choice.\n\n                Arcane Focus (Crystal)\n                Dagger (x2)\n                Dungeoneer’s Pack\n                Spear\n                28 GP",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "SORCERER CLASS FEATURES",
+                "description": "| Level | Proficiency Bonus | Sorcery Points | Features | Cantrips Known | Spells Known | 1st | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th | 9th |\n                |-------|-------------------|----------------|----------|----------------|--------------|-----|-----|-----|-----|-----|-----|-----|-----|-----|\n                | 1st  | +2 | —  | Spellcasting, Sorcerous Origin | 4 | 2  | 2 | — | — | — | — | — | — | — | — |\n                | 2nd  | +2 | 2  | Font of Magic | 4 | 3  | 3 | — | — | — | — | — | — | — | — |\n                | 3rd  | +2 | 3  | Metamagic | 4 | 4  | 4 | 2 | — | — | — | — | — | — | — |\n                | 4th  | +2 | 4  | Ability Score Improvement | 5 | 5  | 4 | 3 | — | — | — | — | — | — | — |\n                | 5th  | +3 | 5  | — | 5 | 6  | 4 | 3 | 2 | — | — | — | — | — | — |\n                | 6th  | +3 | 6  | Sorcerous Origin Feature | 5 | 7  | 4 | 3 | 3 | — | — | — | — | — | — |\n                | 7th  | +3 | 7  | — | 5 | 8  | 4 | 3 | 3 | 1 | — | — | — | — | — |\n                | 8th  | +3 | 8  | Ability Score Improvement | 5 | 9  | 4 | 3 | 3 | 2 | — | — | — | — | — |\n                | 9th  | +4 | 9  | — | 5 | 10 | 4 | 3 | 3 | 3 | 1 | — | — | — | — |\n                | 10th | +4 | 10 | Metamagic | 6 | 11 | 4 | 3 | 3 | 3 | 2 | — | — | — | — |\n                | 11th | +4 | 11 | — | 6 | 12 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |\n                | 12th | +4 | 12 | Ability Score Improvement | 6 | 12 | 4 | 3 | 3 | 3 | 2 | 1 | — | — | — |\n                | 13th | +5 | 13 | — | 6 | 13 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |\n                | 14th | +5 | 14 | Sorcerous Origin Feature | 6 | 13 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | — | — |\n                | 15th | +5 | 15 | — | 6 | 14 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |\n                | 16th | +5 | 16 | Ability Score Improvement | 6 | 14 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | — |\n                | 17th | +6 | 17 | Metamagic | 6 | 15 | 4 | 3 | 3 | 3 | 2 | 1 | 1 | 1 | 1 |\n                | 18th | +6 | 18 | Sorcerous Origin Feature | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 1 | 1 | 1 | 1 |\n                | 19th | +6 | 19 | Ability Score Improvement | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 2 | 1 | 1 | 1 |\n                | 20th | +6 | 20 | Sorcerous Restoration | 6 | 15 | 4 | 3 | 3 | 3 | 3 | 2 | 2 | 1 | 1 |",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "INNATE SORCERY",
+                "description": "An event in your past left an indelible mark on you, infusing you with a simmering magic. As a Bonus Action, you can unleash that magic for 1 minute, during which you gain the following benefits:\n\n                The spell save DC of your Sorcerer spells increases by 1.\n                You have Advantage on the attack rolls of Sorcerer spells you cast.\n                You can use this feature twice, and you regain all expended uses of it when you finish a Long Rest.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 2
+            },
+            {
+                "name": "SPELLCASTING",
+                "description": "Drawing from your innate magic, you can cast spells. See the Player’s Handbook for rules on spellcasting. The information below details how you use those rules as a Sorcerer.\n\n                Cantrips. You know four cantrips of your choice from the Sorcerer spell list. Rather than choosing, you may start with Light, Prestidigitation, Shocking Grasp, and Sorcerous Burst. Whenever you gain a Sorcerer level, you can replace one of your cantrips from this feature with another Sorcerer cantrip of your choice. When you reach levels 4 and 10 in this class, you learn another Sorcerer cantrip of your choice, as shown in the Cantrips column of the Sorcerer table.\n                Spell Slots. The Sorcerer table shows how many spell slots you have to cast your spells of level 1 and higher. To cast one of these spells, you must expend a slot of the spell’s level or higher. You regain all expended spell slots when you finish a Long Rest. Prepared Spells of Level 1+. You prepare the list of spells of level 1 and higher that are available for you to cast with this feature. To start, choose two level 1 spells from the Sorcerer spell list. Rather than choosing, you may start with Burning Hands and Detect Magic. The number of spells on your list also increases as you gain Sorcerer levels, as shown in the Prepared Spells column of the Sorcerer table. Whenever that number increases, choose additional spells from the Sorcerer spell list until the number of spells on your list matches the number on the table. The chosen spells must be of a level for which you have spell slots. For example, if you’re a level 3 Sorcerer, your list of prepared spells can include six Sorcerer spells of level 1 or 2 in any combination. If another Sorcerer feature gives spells that you always have prepared, those spells don’t count against the number of spells on the list you prepare with this Spellcasting feature, but those spells otherwise follow the rules in this feature.\n                Changing Your Prepared Spells. Whenever you gain a Sorcerer level, you can replace one spell on your list with another Sorcerer spell for which you have spell slots.\n                Spellcasting Ability. Charisma is your spellcasting ability for the spells you cast with your Sorcerer features.\n                Spellcasting Focus. You can use an Arcane Focus as a Spellcasting Focus for the spells you cast with your Sorcerer features.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "FONT OF MAGIC",
+                "description": "You can tap into the wellspring of magic within yourself. This wellspring is represented by Sorcery Points, which allow you to create a variety of magical effects. You have 2 Sorcery Points, and you gain more as you reach higher levels, as shown in the Sorcery Points column of the Sorcerer table. You can never have more Sorcery Points than the number shown on the table for your level. You regain all spent Sorcery Points when you finish a Long Rest. You can use your Sorcery Points to fuel the options below, along with other features, such as Metamagic, that use those points.\n\n                Converting Spell Slots to Sorcery Points. You can expend a spell slot to gain a number of Sorcery Points equal to the slot’s level (no action required).\n                Creating Spell Slots. As a Bonus Action, you can transform unexpended Sorcery Points into one spell slot. The Creating Spell Slots table shows the cost of creating a spell slot of a given level, and it lists the minimum Sorcerer level you must be to create a slot. You can create a spell slot no higher in level than 5. Any spell slot you create with this feature vanishes when you finish a Long Rest.\n\n                CREATING SPELL SLOTS:\n                | Spell Slot Level | Sorcery Point Cost | Min. Sorcerer Level |\n                |------------------|--------------------|---------------------|\n                | 1 | 2 | 2 |\n                | 2 | 3 | 3 |\n                | 3 | 5 | 5 |\n                | 4 | 6 | 7 |\n                | 5 | 7 | 9 |",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 2
+            },
+            {
+                "name": "METAMAGIC",
+                "description": "You gain two Metamagic options of your choice from the Metamagic Options. You use the chosen options to temporarily modify spells you cast. To use an option, you must spend the number of Sorcery Points that it costs. You can use only one Metamagic option on a spell when you cast it, unless otherwise noted in one of those options. Whenever you gain a Sorcerer level, you can replace one of your Metamagic options with one you don’t know. You gain two more options at Sorcerer level 10 and two more at Sorcerer level 17.\n\n                METAMAGIC OPTIONS\n                The following options are available to your Metamagic features. The options are presented in alphabetical order.\n\n                EMPOWERED SPELL\n                Cost: 1 Sorcery Point\n\n                When you roll damage for a spell, you can spend 1 Sorcery Point to reroll a number of the damage dice up to your Charisma modifier (minimum of one), and you must use the new rolls. You can use Empowered Spell even if you have already used a different Metamagic option during the casting of the spell.\n\n                QUICKENED SPELL\n                Cost: 2 Sorcery Points\n\n                When you cast a spell that has a casting time of an action, you can spend 2 Sorcery Points to change the casting time to a Bonus Action for this casting. You can’t modify a spell in this way if you’ve already cast a spell of level 1 or higher on the current turn, nor can you cast a spell of level 1 or higher on this turn after modifying a spell in this way.\n",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "Aasimar Traits",
+                "description": "Creature Type: Humanoid\nSize: Medium (about 4–7 feet tall) or Small (about 2-4 feet tall), chosen when you select this species\nSpeed: 30 feet\nLife Span: 160 years on average",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "Celestial Resistance",
+                "description": "You have resistance to Necrotic damage and Radiant damage.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "Darkvision",
+                "description": "Blessed with a radiant soul, your vision can easily cut through darkness. You have Darkvision with a range of 60 feet.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null
+            },
+            {
+                "name": "Healing Hands",
+                "description": "As a Magic action, you can touch a creature and roll a number of d4s equal to your Proficiency Bonus. The creature regains a number of Hit Points equal to the total rolled. Once you use this trait you can’t use it again until you finish a Long Rest.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 1
+            },
+            {
+                "name": "Light Bearer",
+                "description": "You know the Light cantrip. Charisma is your spellcasting ability for it.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 1
+            }
+        ],
+        "lockedFeaturesAndTraits": [
+            {
+                "name": "SORCERER SUBCLASS",
+                "description": "You gain a Sorcerer subclass of your choice:\n\nAberrant Sorcery\nClockwork Sorcery\nDraconic Sorcery\nWild Magic Sorcery\nDivine Soul Sorcery (Non-Playtest)\nShadow Sorcery (Non-Playtest)\nStorm Sorcery (Non-Playtest)\n\nSubclasses are detailed after this class’s description. A subclass is a specialization that grants you special features at certain Sorcerer levels. For the rest of your career, you gain each of your subclass’s features that are of your Sorcerer level and lower. There are non-playtest subclasses that can be used, please check with your DM before using one.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null,
+                "unlockLevel": 3,
+                "unlockCondition": null
+            },
+            {
+                "name": "ABILITY SCORE IMPROVEMENT",
+                "description": "You gain the Ability Score Improvement feat or another feat of your choice for which you qualify. As shown on the Sorcerer table, you gain this feature again at levels 8, 12, 16.\n                                        \nGeneral Feat (Prerequisite: Level 4+)\n\nIncrease one ability score of your choice by 2, or increase two ability scores of your choice by 1. This feat can’t increase an ability score above 20.\n\nRepeatable. You can take this feat more than once.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null,
+                "unlockLevel": 4,
+                "unlockCondition": null
+            },
+            {
+                "name": "SORCEROUS RESTORATION",
+                "description": "When you finish a Short Rest, you can regain expended Sorcery Points, but no more than a number equal to half your Sorcerer level (round down). Once you use this feature, you can't do so again until you finish a Long Rest.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 1,
+                "unlockLevel": 5,
+                "unlockCondition": null
+            },
+            {
+                "name": "SORCERY INCARNATE",
+                "description": "If you have no uses of Innate Sorcery left, you can use it if you spend 2 Sorcery Points when you take the Bonus Action to activate it. In addition, while your Innate Sorcery feature is active, you can use up to two of your Metamagic Options on each spell you cast.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null,
+                "unlockLevel": 5,
+                "unlockCondition": null
+            },
+            {
+                "name": "EPIC BOON",
+                "description": "You gain an Epic Boon feat or another feat of your choice for which you qualify. Boon of Fate is recommended.\n                                        \nBoon of Combat Prowess\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.\n\nPeerless Aim. When you miss with an attack roll, you can hit instead. Once you use this benefit, you can’t use it again until the start of your next turn.\n\nBoon of Dimensional Travel\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.\n\nBlink Steps. Immediately after you take the Attack action or the Magic action, you can teleport up to 30 feet to an unoccupied space you can see.\n\nBoon of Fate\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.\n\nImprove Fate. When you or another creature within 60 feet of you succeeds on or fails a D20 Test, you can roll 2d4 and apply the total rolled as a bonus or penalty to the d20 roll. Once you use this benefit, you can’t use it again until you roll Initiative or finish a Short or Long Rest.\n\nBoon of Irresistible Offense\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase your Strength or Dexterity score by 1, to a maximum of 30.\n\nOvercome Defenses. The Bludgeoning, Piercing, and Slashing damage you deal always ignores Resistance.\n\nOverwhelming Strike. When you roll a 20 on the d20 for an attack roll, you can deal extra damage to the target equal to the ability score increased by this feat. The extra damage’s type is the same as the attack’s type.\n\nBoon of the Night Spirit\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.\n\nMerge with Shadows. While within Dim Light or Darkness, you can give yourself the Invisible condition as a Bonus Action. The condition ends on you immediately after you take an action, a Bonus Action, or a Reaction.\n\nShadowy Form. While within Dim Light or Darkness, you have Resistance to all damage except Psychic and Radiant.\n\nBoon of Spell Recall\nEpic Boon Feat (Prerequisite: Level 19+, Spellcasting Feature)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase your Intelligence, Wisdom, or Charisma score by 1, to a maximum of 30.\n\nFree Casting. Whenever you cast a spell with a level 1–4 spell slot, roll 1d4. If the number you roll is the same as the slot’s level, the slot isn’t expended.\n\nBoon of Truesight\nEpic Boon Feat (Prerequisite: Level 19+)\n\nYou gain the following benefits.\n\nAbility Score Increase. Increase one ability score of your choice by 1, to a maximum of 30.\n\nTruesight. You have Truesight with a range of 60 feet.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null,
+                "unlockLevel": 19,
+                "unlockCondition": null
+            },
+            {
+                "name": "ARCANE APOTHEOSIS",
+                "description": "While your Innate Sorcery feature is active, you can use one Metamagic Option on each of your turns without expending Sorcery Points on it",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": null,
+                "maxCharges": null,
+                "unlockLevel": 20,
+                "unlockCondition": null
+            },
+            {
+                "name": "Celestial Revelation",
+                "description": "When you reach character 3rd level, you can transform as a Bonus Action using one of the options below (choose the option each time you transform). The transformation lasts for 1 minute or until you end it (no action required). Once you transform, you can't do so again until you finish a Long Rest. Once on each of your turns before the transformation ends, you can deal extra damage to one target when you deal damage to it with an attack or spell. The extra damage equals your Proficiency Bonus, and the extra damage's type is either Necrotic for Necrotic Shroud or Radiant for Heavenly Wings and Inner Radiance.\nHeavenly Wings. Two spectral wings sprout from your back temporarily. Until your transformation ends, you have a Flying Speed equal to your Speed.\nInner Radiance. Searing light temporarily radiates from your eyes and mouth. For the duration, you shed Bright Light in a 10-foot radius and Dim Light for an additional 10 feet, and at the end of each of your turns, each creature within 10 feet of you takes Radiant damage equal to your Proficiency Bonus.\nNecrotic Shroud. Your eyes turn into pools of darkness and flightless wings sprout from your back temporarily. Creatures other than your allies within 10 feet of you must each succeed on a Charisma saving throw (DC 8 + your proficiency bonus + your Charisma modifier) or have the Frightened condition until the end of your next turn.",
+                "duration": null,
+                "trigger": null,
+                "cooldown": null,
+                "usedCharges": 0,
+                "maxCharges": 1,
+                "unlockLevel": 3,
+                "unlockCondition": null
+            }
+        ]
+    },
+    "notes": {
+        "organizations": null,
+        "allies": null,
+        "enemies": null,
+        "backstory": "Pearl is a rank P45 senior manager of the Strategic Investment Department in the Interastral Peace Corporation, a member of the Ten Stonehearts, the leader of Pearluxe Corp, and the CEO of Planarcadia.",
+        "other": null
+    }
+}
