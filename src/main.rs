@@ -63,40 +63,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         story_service: Arc::clone(&story_service),
     });
 
+    macro_rules! create_llm {
+        ($provider:ty) => {
+            Arc::new(Mutex::new(<$provider>::new(
+                &service_config.config.model,
+                tool_service,
+                story_service,
+                Arc::clone(&character_sheet_service),
+                service_config.config.dm_id.clone(),
+                service_config.config.prompts_folder_path,
+                service_config.config.compile_trigger,
+                service_config.config.base_url,
+                service_config.config.retry_attempt,
+            )?))
+        };
+    }
+
     let llm: Arc<Mutex<dyn Llm>> = match service_config.config.provider {
-        config::Provider::OpenAi => Arc::new(Mutex::new(OpenAi::new(
-            &service_config.config.model,
-            tool_service,
-            story_service,
-            Arc::clone(&character_sheet_service),
-            service_config.config.dm_id.clone(),
-            service_config.config.prompts_folder_path,
-            service_config.config.compile_trigger,
-            service_config.config.base_url,
-            service_config.config.retry_attempt,
-        )?)),
-        config::Provider::Gemini => Arc::new(Mutex::new(Gemini::new(
-            &service_config.config.model,
-            tool_service,
-            story_service,
-            Arc::clone(&character_sheet_service),
-            service_config.config.dm_id.clone(),
-            service_config.config.prompts_folder_path,
-            service_config.config.compile_trigger,
-            service_config.config.base_url,
-            service_config.config.retry_attempt,
-        )?)),
-        config::Provider::DeepSeek => Arc::new(Mutex::new(DeepSeek::new(
-            &service_config.config.model,
-            tool_service,
-            story_service,
-            Arc::clone(&character_sheet_service),
-            service_config.config.dm_id.clone(),
-            service_config.config.prompts_folder_path,
-            service_config.config.compile_trigger,
-            service_config.config.base_url,
-            service_config.config.retry_attempt,
-        )?)),
+        config::Provider::OpenAi => create_llm!(OpenAi),
+        config::Provider::Gemini => create_llm!(Gemini),
+        config::Provider::DeepSeek => create_llm!(DeepSeek),
         config::Provider::Qwen => todo!(),
         config::Provider::Anthropic => todo!(),
         config::Provider::OpenRouter => todo!(),
