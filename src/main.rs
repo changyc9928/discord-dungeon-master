@@ -1,11 +1,16 @@
 use std::{error::Error, sync::Arc};
 
-use tokio::sync::Mutex;
+use axum::Router;
+use tokio::{
+    net::TcpListener,
+    signal::unix::{SignalKind, signal},
+    sync::Mutex,
+};
 
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
     config::{AiDmConfig, ServiceConfig},
-    llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen},
+    llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi},
     pg_pool::{TestPgPool, TestPgPoolConfig},
     story::{
         repository::{DialogueRepository, StoryRepository},
@@ -93,6 +98,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .or_else(|| std::env::var("DISCORD_TOKEN").ok())
         .ok_or_else(|| discord_bot::DiscordBotError::MissingDiscordToken)?;
 
+    let llm_api = LlmApi {
+        llm_service: llm.clone(),
+        character_sheet_service: character_sheet_service.clone(),
+    };
+
     discord_bot::handler::start_bot(
         &discord_token,
         llm,
@@ -105,5 +115,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )
     .await?;
 
+    let router = Router::new().merge(llm_api);
+
+    let listener = TcpListener::bind((
+        service_config.server.host.as_str(),
+        service_config.server.port,
+    ))
+    .await?;
+    tokio::spawn(async move {
+        axum::serve(listener, router)
+            .with_graceful_shutdown(shutdown_handler())
+            .await
+    })
+    .await??;
+
     Ok(())
+}
+
+async fn shutdown_handler() {
+    let ctrl_c = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!("Failed to install CTRL-C signal handler: {error}");
+            std::process::exit(1);
+        }
+    };
+    let terminate = async {
+        match signal(SignalKind::terminate()) {
+            Ok(mut signal) => signal.recv().await,
+            Err(error) => {
+                tracing::error!("Failed to install SIGTERM handler: {error}");
+                std::process::exit(1);
+            }
+        }
+    };
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("Recieved CTRL-C. Shutting down..."),
+        _ = terminate => tracing::info!("Recieved SIGTERM. Shutting down..."),
+    }
 }
