@@ -5,10 +5,7 @@ use tokio::sync::Mutex;
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
     config::{AiDmConfig, ServiceConfig},
-    llm::{
-        Llm,
-        core::{deepseek::DeepSeek, gemini::Gemini, openai::OpenAi},
-    },
+    llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen},
     pg_pool::{TestPgPool, TestPgPoolConfig},
     story::{
         repository::{DialogueRepository, StoryRepository},
@@ -83,10 +80,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         config::Provider::OpenAi => create_llm!(OpenAi),
         config::Provider::Gemini => create_llm!(Gemini),
         config::Provider::DeepSeek => create_llm!(DeepSeek),
-        config::Provider::Qwen => todo!(),
-        config::Provider::Anthropic => todo!(),
-        config::Provider::OpenRouter => todo!(),
-        config::Provider::Ollama => todo!(),
+        config::Provider::Qwen => create_llm!(Qwen),
+        config::Provider::Anthropic => create_llm!(Anthropic),
+        config::Provider::OpenRouter => create_llm!(OpenRouter),
+        config::Provider::Ollama => create_llm!(Ollama),
     };
 
     let discord_token = service_config

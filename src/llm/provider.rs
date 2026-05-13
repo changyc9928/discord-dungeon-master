@@ -5,11 +5,7 @@ use rig::{completion::Completion, message::Message, tool::ToolDyn};
 use tracing::info;
 
 use crate::{
-    llm::{
-        Llm,
-        core::common::{Cache, LlmCore, ToolFactory},
-        error::LlmError,
-    },
+    llm::{Cache, Llm, LlmCore, ToolFactory, error::LlmError},
     tool::types::{
         AbilitiesToolCall, CombatToolCall, IdentityToolCall, InventoryToolCall, MetaToolCall,
         NewDialogueToolCall, NotesToolCall, ProgressionToolCall, SkillsToolCall, SpellToolCall,
@@ -461,10 +457,7 @@ mod test {
             service::CharacterSheetService,
         },
         config::{AiDmConfig, ServiceConfig},
-        llm::{
-            Llm,
-            core::{common::LlmCore, gemini::Gemini},
-        },
+        llm::{Gemini, Llm, LlmCore},
         pg_pool::{TestPgPool, TestPgPoolConfig},
         story::{
             entity::{DialogueEntity, StoryEntity},
