@@ -8,8 +8,9 @@ use sqlx::{
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgValueRef},
 };
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct AbilitiesBlock {
@@ -68,7 +69,7 @@ impl Encode<'_, Postgres> for AbilitiesBlock {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AbilityScore {
     pub base: i64,

@@ -25,6 +25,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - RUST_LOG=none,discord_dungeon_master=debug,sqlx=debug
     ports:

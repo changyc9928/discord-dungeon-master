@@ -9,10 +9,11 @@ use sqlx::{
     postgres::{PgArgumentBuffer, PgValueRef},
 };
 use strum::Display;
+use utoipa::ToSchema;
 
 use crate::character::entity::{Ability, abilities_block::AbilitiesBlock};
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Combat {
@@ -65,7 +66,7 @@ impl Encode<'_, Postgres> for Combat {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Speed {
@@ -73,7 +74,7 @@ pub struct Speed {
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Sense {
@@ -81,7 +82,7 @@ pub struct Sense {
     pub value: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Defenses {
@@ -91,7 +92,18 @@ pub struct Defenses {
 }
 
 #[derive(
-    Debug, Deserialize, Serialize, Clone, Copy, Display, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+    Debug,
+    Deserialize,
+    Serialize,
+    Clone,
+    Copy,
+    Display,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    JsonSchema,
+    ToSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -112,7 +124,7 @@ pub enum Condition {
     Unconscious,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct SavingThrows {
@@ -147,7 +159,7 @@ impl SavingThrows {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Action {
@@ -156,7 +168,7 @@ pub struct Action {
     pub max_use_time: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct CombatAction {

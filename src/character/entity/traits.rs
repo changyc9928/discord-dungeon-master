@@ -8,8 +8,9 @@ use sqlx::{
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgValueRef},
 };
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Traits {
@@ -53,7 +54,7 @@ impl Encode<'_, Postgres> for Traits {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureTraits {
     pub name: String,
@@ -65,7 +66,7 @@ pub struct FeatureTraits {
     pub max_charges: Option<i64>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LockedFeatureTraits {
     #[serde(flatten)]

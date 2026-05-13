@@ -28,3 +28,5 @@ chrono = "0.4.44"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 rig = "0.36"
 dotenvy = "0.15"
+axum = { version = "0.8.9", features = ["macros"] }
+utoipa = { version = "5.5.0", features = ["axum_extras"] }

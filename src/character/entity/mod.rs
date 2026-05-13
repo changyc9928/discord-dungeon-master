@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use strum::Display;
+use utoipa::ToSchema;
 
 use crate::character::entity::{
     abilities_block::AbilitiesBlock, combat::Combat, identity::Identity, inventory::Inventory,
@@ -34,6 +35,7 @@ pub mod traits;
     Ord,
     JsonSchema,
     Default,
+    ToSchema,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -48,7 +50,9 @@ pub enum Ability {
     Charisma,
 }
 
-#[derive(Debug, FromRow, Deserialize, Serialize, Clone, Default, JsonSchema)]
+#[derive(
+    Debug, FromRow, Deserialize, Serialize, Clone, Default, JsonSchema, ToSchema, PartialEq, Eq,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterSheet {
     pub meta: Meta,

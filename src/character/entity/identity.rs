@@ -8,8 +8,9 @@ use sqlx::{
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgValueRef},
 };
+use utoipa::ToSchema;
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Identity {
@@ -57,7 +58,7 @@ impl Encode<'_, Postgres> for Identity {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct Characteristics {

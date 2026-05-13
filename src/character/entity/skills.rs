@@ -8,10 +8,11 @@ use sqlx::{
     encode::IsNull,
     postgres::{PgArgumentBuffer, PgValueRef},
 };
+use utoipa::ToSchema;
 
 use crate::character::entity::{Ability, abilities_block::AbilitiesBlock};
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Skills {
     pub acrobatics: SkillStatus,
@@ -109,7 +110,7 @@ impl Skills {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, JsonSchema, Default, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[schemars(inline)]
 pub struct SkillStatus {

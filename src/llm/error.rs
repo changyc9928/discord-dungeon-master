@@ -1,3 +1,8 @@
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use rig::{
     client::ProviderClientError,
     completion::{CompletionError, PromptError},
@@ -37,4 +42,10 @@ pub enum LlmError {
     CompletionError(#[from] CompletionError),
     #[error(transparent)]
     HttpError(#[from] rig::http_client::Error),
+}
+
+impl IntoResponse for LlmError {
+    fn into_response(self) -> Response {
+        (StatusCode::BAD_REQUEST, Json(self.to_string())).into_response()
+    }
 }
