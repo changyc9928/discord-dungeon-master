@@ -19,6 +19,7 @@ services:
       - ./config/config.yaml:/app/config.yaml
       - ./migrations:/app/db/migrations
       - ./prompts:/app/prompts
+      - ./docs:/docs
     environment:
       - DATABASE__HOST=db
       - DATABASE__PORT=5432

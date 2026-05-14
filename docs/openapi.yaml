@@ -1,0 +1,737 @@
+openapi: 3.1.0
+info:
+  title: LLM Service
+  description: LLM Service API
+  license:
+    name: ''
+  version: 1.0.0
+servers:
+- url: http://localhost:30000
+  description: Local server
+paths:
+  /dm/v1//validate:
+    post:
+      tags:
+      - llm
+      summary: Validate the incoming chat request and forward it to the LLM
+      description: Accepts a chat request, optionally validates the supplied character sheet against the database, builds the final prompt, and forwards it to the LLM service.
+      operationId: validate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+        required: true
+      responses:
+        '200':
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateResponse'
+        '400':
+          description: Bad request
+        '403':
+          description: Insufficient permissions
+components:
+  schemas:
+    AbilitiesBlock:
+      type: object
+      required:
+      - strength
+      - intelligence
+      - dexterity
+      - constitution
+      - charisma
+      - wisdom
+      properties:
+        charisma:
+          $ref: '#/components/schemas/AbilityScore'
+        constitution:
+          $ref: '#/components/schemas/AbilityScore'
+        dexterity:
+          $ref: '#/components/schemas/AbilityScore'
+        intelligence:
+          $ref: '#/components/schemas/AbilityScore'
+        strength:
+          $ref: '#/components/schemas/AbilityScore'
+        wisdom:
+          $ref: '#/components/schemas/AbilityScore'
+    Ability:
+      type: string
+      enum:
+      - STRENGTH
+      - INTELLIGENCE
+      - DEXTERITY
+      - WISDOM
+      - CONSTITUTION
+      - CHARISMA
+    AbilityScore:
+      type: object
+      required:
+      - base
+      - modifier
+      properties:
+        base:
+          type: integer
+          format: int64
+        modifier:
+          type: integer
+          format: int64
+    Action:
+      type: object
+      required:
+      - name
+      properties:
+        maxUseTime:
+          type:
+          - string
+          - 'null'
+        name:
+          type: string
+        usedTime:
+          type:
+          - integer
+          - 'null'
+          format: int64
+    CharacterSheet:
+      type: object
+      required:
+      - meta
+      - identity
+      - progression
+      - combat
+      - abilitiesBlock
+      - skills
+      - magic
+      - inventory
+      - traits
+      - notes
+      properties:
+        abilitiesBlock:
+          $ref: '#/components/schemas/AbilitiesBlock'
+        combat:
+          $ref: '#/components/schemas/Combat'
+        identity:
+          $ref: '#/components/schemas/Identity'
+        inventory:
+          $ref: '#/components/schemas/Inventory'
+        magic:
+          $ref: '#/components/schemas/Spells'
+        meta:
+          $ref: '#/components/schemas/Meta'
+        notes:
+          $ref: '#/components/schemas/Notes'
+        progression:
+          $ref: '#/components/schemas/Progression'
+        skills:
+          $ref: '#/components/schemas/Skills'
+        traits:
+          $ref: '#/components/schemas/Traits'
+    Characteristics:
+      type: object
+      required:
+      - background
+      - backgroundFeature
+      - backgroundFeatureDescription
+      - alignment
+      - gender
+      - eyes
+      - size
+      - height
+      - faith
+      - hair
+      - skin
+      - age
+      - weight
+      - personalityTraits
+      - ideals
+      - bonds
+      - flaws
+      - appearanceTrait
+      properties:
+        age:
+          type: integer
+          format: int64
+          minimum: 0
+        alignment:
+          type: string
+        appearanceTrait:
+          type: array
+          items:
+            type: string
+        background:
+          type: string
+        backgroundFeature:
+          type: string
+        backgroundFeatureDescription:
+          type: string
+        bonds:
+          type: string
+        eyes:
+          type: string
+        faith:
+          type: string
+        flaws:
+          type: string
+        gender:
+          type: string
+        hair:
+          type: string
+        height:
+          type: string
+        ideals:
+          type: string
+        personalityTraits:
+          type: string
+        size:
+          type: string
+        skin:
+          type: string
+        weight:
+          type: string
+    Combat:
+      type: object
+      required:
+      - armorClass
+      - initiative
+      - hitPoints
+      - speed
+      - senses
+      - defenses
+      - conditions
+      - exhaustionLevel
+      - savingThrows
+      - actions
+      - combatActions
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+        armorClass:
+          type: integer
+          format: int64
+        combatActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CombatAction'
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        defenses:
+          $ref: '#/components/schemas/Defenses'
+        exhaustionLevel:
+          type: integer
+          format: int32
+        hitPoints:
+          type: integer
+          format: int64
+        initiative:
+          type: integer
+          format: int64
+        savingThrows:
+          $ref: '#/components/schemas/SavingThrows'
+        senses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sense'
+        speed:
+          type: array
+          items:
+            $ref: '#/components/schemas/Speed'
+    CombatAction:
+      type: object
+      required:
+      - name
+      - damage
+      properties:
+        damage:
+          type: string
+        hitDc:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        name:
+          type: string
+    Condition:
+      type: string
+      enum:
+      - BLINDED
+      - CHARMED
+      - DEAFENED
+      - FRIGHTENED
+      - GRAPPLED
+      - INCAPACITATED
+      - INVISIBLE
+      - PARALYZED
+      - PETRIFIED
+      - POISONED
+      - PRONE
+      - RESTRAINED
+      - STUNNED
+      - UNCONSCIOUS
+    Defenses:
+      type: object
+      required:
+      - resistance
+      - immunities
+      - vulnerabilities
+      properties:
+        immunities:
+          type: array
+          items:
+            type: string
+        resistance:
+          type: array
+          items:
+            type: string
+        vulnerabilities:
+          type: array
+          items:
+            type: string
+    FeatureTraits:
+      type: object
+      required:
+      - name
+      - description
+      properties:
+        cooldown:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        description:
+          type: string
+        duration:
+          type:
+          - string
+          - 'null'
+        maxCharges:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        name:
+          type: string
+        trigger:
+          type:
+          - string
+          - 'null'
+        usedCharges:
+          type:
+          - integer
+          - 'null'
+          format: int64
+    Identity:
+      type: object
+      required:
+      - characterName
+      - species
+      - class
+      - characteristics
+      properties:
+        characterName:
+          type: string
+        characteristics:
+          $ref: '#/components/schemas/Characteristics'
+        class:
+          type: string
+        species:
+          type: string
+        subClass:
+          type:
+          - string
+          - 'null'
+        subSpecies:
+          type:
+          - string
+          - 'null'
+    Inventory:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+    Item:
+      type: object
+      required:
+      - name
+      - weight
+      - costGp
+      - equiped
+      properties:
+        costGp:
+          type: integer
+          format: int64
+        equiped:
+          type: boolean
+        name:
+          type: string
+        quantity:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        weight:
+          type: integer
+          format: int64
+    LockedFeatureTraits:
+      allOf:
+      - $ref: '#/components/schemas/FeatureTraits'
+      - type: object
+        properties:
+          unlockCondition:
+            type:
+            - string
+            - 'null'
+          unlockLevel:
+            type:
+            - integer
+            - 'null'
+            format: int64
+    Meta:
+      type: object
+      required:
+      - discordId
+      - location
+      - extraCreatures
+      - dead
+      properties:
+        actionEndTime:
+          type:
+          - string
+          - 'null'
+        dead:
+          type: boolean
+        discordId:
+          type: string
+        extraCreatures:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+        performingAction:
+          type:
+          - string
+          - 'null'
+        storySummary:
+          type:
+          - string
+          - 'null'
+    Notes:
+      type: object
+      required:
+      - backstory
+      properties:
+        allies:
+          type:
+          - string
+          - 'null'
+        backstory:
+          type: string
+        enemies:
+          type:
+          - string
+          - 'null'
+        organizations:
+          type:
+          - string
+          - 'null'
+        other:
+          type:
+          - string
+          - 'null'
+    ProficianciesTrainings:
+      type: object
+      required:
+      - proficiencyBonus
+      - armor
+      - weapons
+      - tools
+      - languages
+      properties:
+        armor:
+          type: array
+          items:
+            type: string
+        languages:
+          type: array
+          items:
+            type: string
+        proficiencyBonus:
+          type: integer
+          format: int64
+        tools:
+          type: array
+          items:
+            type: string
+        weapons:
+          type: array
+          items:
+            type: string
+    Progression:
+      type: object
+      required:
+      - level
+      - xp
+      - totalHitDice
+      - maxHp
+      - proficiencies
+      properties:
+        level:
+          type: integer
+          format: int64
+        maxHp:
+          type: integer
+          format: int64
+        proficiencies:
+          $ref: '#/components/schemas/ProficianciesTrainings'
+        totalHitDice:
+          type: string
+        xp:
+          type: integer
+          format: int64
+    SavingThrows:
+      type: object
+      required:
+      - proficiency
+      - strengthSavingThrows
+      - intelligenceSavingThrows
+      - dexteritySavingThrows
+      - wisdomSavingThrows
+      - constitutionSavingThrows
+      - charismaSavingThrows
+      properties:
+        charismaSavingThrows:
+          type: integer
+          format: int64
+        constitutionSavingThrows:
+          type: integer
+          format: int64
+        dexteritySavingThrows:
+          type: integer
+          format: int64
+        intelligenceSavingThrows:
+          type: integer
+          format: int64
+        proficiency:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ability'
+        strengthSavingThrows:
+          type: integer
+          format: int64
+        wisdomSavingThrows:
+          type: integer
+          format: int64
+    Sense:
+      type: object
+      required:
+      - name
+      - value
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+    SkillStatus:
+      type: object
+      required:
+      - prof
+      - bonus
+      - modifier
+      - passive
+      properties:
+        bonus:
+          type: integer
+          format: int64
+        modifier:
+          $ref: '#/components/schemas/Ability'
+        passive:
+          type: integer
+          format: int64
+        prof:
+          type: boolean
+    Skills:
+      type: object
+      required:
+      - acrobatics
+      - animalHandling
+      - arcana
+      - athletics
+      - deception
+      - history
+      - insight
+      - intimidation
+      - investigation
+      - medicine
+      - nature
+      - perception
+      - performance
+      - persuasion
+      - religion
+      - sleightOfHand
+      - stealth
+      - survival
+      properties:
+        acrobatics:
+          $ref: '#/components/schemas/SkillStatus'
+        animalHandling:
+          $ref: '#/components/schemas/SkillStatus'
+        arcana:
+          $ref: '#/components/schemas/SkillStatus'
+        athletics:
+          $ref: '#/components/schemas/SkillStatus'
+        deception:
+          $ref: '#/components/schemas/SkillStatus'
+        history:
+          $ref: '#/components/schemas/SkillStatus'
+        insight:
+          $ref: '#/components/schemas/SkillStatus'
+        intimidation:
+          $ref: '#/components/schemas/SkillStatus'
+        investigation:
+          $ref: '#/components/schemas/SkillStatus'
+        medicine:
+          $ref: '#/components/schemas/SkillStatus'
+        nature:
+          $ref: '#/components/schemas/SkillStatus'
+        perception:
+          $ref: '#/components/schemas/SkillStatus'
+        performance:
+          $ref: '#/components/schemas/SkillStatus'
+        persuasion:
+          $ref: '#/components/schemas/SkillStatus'
+        religion:
+          $ref: '#/components/schemas/SkillStatus'
+        sleightOfHand:
+          $ref: '#/components/schemas/SkillStatus'
+        stealth:
+          $ref: '#/components/schemas/SkillStatus'
+        survival:
+          $ref: '#/components/schemas/SkillStatus'
+    Speed:
+      type: object
+      required:
+      - name
+      - value
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+    Spell:
+      type: object
+      required:
+      - name
+      - level
+      - castTime
+      - range
+      - effect
+      properties:
+        castTime:
+          type: string
+        effect:
+          type: string
+        hitDc:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        level:
+          type: integer
+          format: int64
+        name:
+          type: string
+        range:
+          type: string
+    SpellSlot:
+      type: object
+      required:
+      - level
+      - slot
+      - used
+      properties:
+        level:
+          type: integer
+          format: int64
+        slot:
+          type: integer
+          format: int64
+        used:
+          type: integer
+          format: int64
+    Spells:
+      type: object
+      required:
+      - spells
+      - spellSlots
+      - abilityType
+      - abilityModifier
+      - spellAttack
+      - saveDc
+      properties:
+        abilityModifier:
+          type: integer
+          format: int64
+        abilityType:
+          $ref: '#/components/schemas/Ability'
+        saveDc:
+          type: integer
+          format: int64
+        spellAttack:
+          type: integer
+          format: int64
+        spellSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpellSlot'
+        spells:
+          type: array
+          items:
+            $ref: '#/components/schemas/Spell'
+    Traits:
+      type: object
+      required:
+      - unlockedFeaturesAndTraits
+      - lockedFeaturesAndTraits
+      properties:
+        lockedFeaturesAndTraits:
+          type: array
+          items:
+            $ref: '#/components/schemas/LockedFeatureTraits'
+        unlockedFeaturesAndTraits:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureTraits'
+    ValidateRequest:
+      type: object
+      required:
+      - author_discord_id
+      - message
+      properties:
+        author_discord_id:
+          type: string
+        character_sheet:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/CharacterSheet'
+        message:
+          type: string
+    ValidateResponse:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+tags:
+- name: llm
+  description: LLM endpoints

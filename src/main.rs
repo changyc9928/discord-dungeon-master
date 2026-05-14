@@ -6,17 +6,13 @@ use tokio::{
     signal::unix::{SignalKind, signal},
     sync::Mutex,
 };
+use utoipa::OpenApi;
 
 use crate::{
-    character::{repository::CharacterSheetRepository, service::CharacterSheetService},
-    config::{AiDmConfig, ServiceConfig},
-    llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi},
-    pg_pool::{TestPgPool, TestPgPoolConfig},
-    story::{
+    character::{repository::CharacterSheetRepository, service::CharacterSheetService}, config::{AiDmConfig, ServiceConfig}, llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi}, openapi::LlmOpenApi, pg_pool::{TestPgPool, TestPgPoolConfig}, story::{
         repository::{DialogueRepository, StoryRepository},
         service::StoryService,
-    },
-    tool::service::ToolService,
+    }, tool::service::ToolService
 };
 
 pub mod character;
@@ -24,6 +20,7 @@ pub mod config;
 pub mod discord_bot;
 pub mod error;
 pub mod llm;
+pub mod openapi;
 pub mod pg_pool;
 pub mod story;
 pub mod tool;
@@ -32,6 +29,11 @@ pub mod tool;
 async fn main() -> Result<(), Box<dyn Error>> {
     // Basic initialization that prints to stdout
     tracing_subscriber::fmt::init();
+
+    let openapi = LlmOpenApi::openapi();
+    let output = "docs/openapi.yaml";
+    std::fs::write(output, serde_yaml::to_string(&openapi)?)?;
+    println!("OpenAPI spec written to {output}");
 
     let service_config: ServiceConfig<AiDmConfig> = ServiceConfig::load("/app/config.yaml")?;
     let db_config = service_config
