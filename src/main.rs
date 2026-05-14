@@ -6,13 +6,20 @@ use tokio::{
     signal::unix::{SignalKind, signal},
     sync::Mutex,
 };
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 
 use crate::{
-    character::{repository::CharacterSheetRepository, service::CharacterSheetService}, config::{AiDmConfig, ServiceConfig}, llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi}, openapi::LlmOpenApi, pg_pool::{TestPgPool, TestPgPoolConfig}, story::{
+    character::{repository::CharacterSheetRepository, service::CharacterSheetService},
+    config::{AiDmConfig, ServiceConfig},
+    llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi},
+    openapi::LlmOpenApi,
+    pg_pool::{TestPgPool, TestPgPoolConfig},
+    story::{
         repository::{DialogueRepository, StoryRepository},
         service::StoryService,
-    }, tool::service::ToolService
+    },
+    tool::service::ToolService,
 };
 
 pub mod character;
@@ -27,8 +34,25 @@ pub mod tool;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // Basic initialization that prints to stdout
-    tracing_subscriber::fmt::init();
+    // logs/app.log
+    let file_appender = tracing_appender::rolling::daily("logs", "app.log");
+
+    // non_blocking prevents file IO from blocking your async/runtime threads
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        // stdout layer
+        .with(fmt::layer().with_target(true).with_writer(std::io::stdout))
+        // file layer
+        .with(
+            fmt::layer()
+                .with_ansi(false) // disable colors in files
+                .with_writer(non_blocking),
+        )
+        .try_init()?;
 
     let openapi = LlmOpenApi::openapi();
     let output = "docs/openapi.yaml";

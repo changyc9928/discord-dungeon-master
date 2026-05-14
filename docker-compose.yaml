@@ -20,6 +20,7 @@ services:
       - ./migrations:/app/db/migrations
       - ./prompts:/app/prompts
       - ./docs:/docs
+      - ./logs:/logs
     environment:
       - DATABASE__HOST=db
       - DATABASE__PORT=5432
