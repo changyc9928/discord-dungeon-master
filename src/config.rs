@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::Path};
 use config::{Config, ConfigError};
 use serde::{Deserialize, de::DeserializeOwned};
 use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -94,6 +95,18 @@ pub enum LevelInner {
     Error,
 }
 
+impl LevelInner {
+    fn as_directive(&self) -> &'static str {
+        match self {
+            LevelInner::Trace => "trace",
+            LevelInner::Debug => "debug",
+            LevelInner::Info => "info",
+            LevelInner::Warn => "warn",
+            LevelInner::Error => "error",
+        }
+    }
+}
+
 impl From<LevelInner> for Level {
     fn from(value: LevelInner) -> Self {
         match value {
@@ -103,6 +116,18 @@ impl From<LevelInner> for Level {
             LevelInner::Warn => Level::WARN,
             LevelInner::Error => Level::ERROR,
         }
+    }
+}
+
+impl LoggingConfig {
+    pub fn env_filter(&self) -> EnvFilter {
+        let mut directives = vec![self.default.as_directive().to_owned()];
+        directives.extend(
+            self.others
+                .iter()
+                .map(|(target, level)| format!("{target}={}", level.as_directive())),
+        );
+        EnvFilter::new(directives.join(","))
     }
 }
 
@@ -165,7 +190,6 @@ pub struct AiDmConfig {
     #[serde(default = "default_buffer_check_interval_seconds")]
     pub buffer_check_interval_seconds: u64,
     pub compile_trigger: i64,
-    pub prompts_folder_path: String,
     pub retry_attempt: i64,
     pub base_url: Option<String>,
     pub provider: Provider,

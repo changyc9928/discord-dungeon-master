@@ -1,9 +1,9 @@
 use chrono::DateTime;
 use poise::serenity_prelude as serenity;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
-use tokio::time::{Duration, interval};
-use tracing::{debug, info};
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::{interval, Duration};
+use tracing::{debug, error, info, instrument};
 
 use crate::character::service::CharacterSheetService;
 use crate::discord_bot::{commands, error::DiscordBotError};
@@ -33,6 +33,7 @@ pub struct Data {
     pub character_sheet_service: Arc<CharacterSheetService>,
 }
 
+#[instrument(skip(ctx, event, _framework, data))]
 async fn event_handler(
     ctx: &serenity::Context,
     event: &serenity::FullEvent,
@@ -64,8 +65,11 @@ async fn event_handler(
     };
 
     info!(
-        "Received message from {}: {}",
-        author_name, new_message.content
+        author_id = %author_id,
+        author_name = %author_name,
+        channel_id = %channel_id,
+        message_len = new_message.content.len(),
+        "received message"
     );
 
     if new_message.mentions_user_id(data.self_discord_id.parse::<u64>()?) && !new_message.author.bot
@@ -82,13 +86,15 @@ async fn event_handler(
         };
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(e) = channel_id.say(ctx, &response).await {
-            tracing::error!("Failed to send message: {}", e);
+            error!(error = %e, author_id = %author_id, "failed to send mention response");
+        } else {
+            info!(author_id = %author_id, "sent mention response");
         }
     } else if author_id == data.dm_discord_id {
-        debug!("Buffering DM messages");
+        debug!(author_id = %author_id, "buffering DM message");
         let mut messages = data.buffered_messages.lock().await;
         messages.push(buffered_message);
-        debug!("Pushed message");
+        debug!(buffered_message_count = messages.len(), "buffered DM message");
     } else {
         if let Err(e) = data
             .llm
@@ -97,24 +103,24 @@ async fn event_handler(
             .store_new_dialogue(&new_message.content, &author_id, &author_name)
             .await
         {
-            tracing::error!("LLM error: {}", e);
+            error!(error = %e, author_id = %author_id, "failed to store new dialogue");
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(send_err) = channel_id
                 .say(ctx, format!("Error processing buffered messages: {}", e))
                 .await
             {
-                tracing::error!("Failed to send error message: {}", send_err);
+                error!(error = %send_err, "failed to send error message");
             }
         }
 
         if let Err(e) = data.llm.lock().await.new_summary().await {
-            tracing::error!("LLM error: {}", e);
+            error!(error = %e, author_id = %author_id, "failed to generate summary");
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(send_err) = channel_id
                 .say(ctx, format!("Error processing buffered messages: {}", e))
                 .await
             {
-                tracing::error!("Failed to send error message: {}", send_err);
+                error!(error = %send_err, "failed to send error message");
             }
         }
     }
@@ -132,6 +138,14 @@ pub async fn start_bot(
     buffer_check_interval_seconds: u64,
     character_sheet_service: Arc<CharacterSheetService>,
 ) -> Result<(), DiscordBotError> {
+    info!(
+        channel_id = %channel_id,
+        dm_discord_id = %dm_discord_id,
+        buffer_check_interval_seconds,
+        buffered_message_expiry_seconds,
+        "initializing discord bot"
+    );
+
     let llm_service = Arc::clone(&llm);
 
     // Create channel for buffer flush communication
@@ -177,6 +191,8 @@ pub async fn start_bot(
                     character_sheet_service,
                 };
 
+                info!("started discord bot setup");
+
                 // Start the periodic buffer check task
                 start_buffer_check_task(Arc::new(data.clone()), ctx.clone(), flush_receiver);
 
@@ -192,12 +208,20 @@ pub async fn start_bot(
     .framework(framework)
     .await?;
 
+    info!("starting discord client");
     client.start().await?;
 
     Ok(())
 }
 
+#[instrument(skip(data))]
 async fn should_flush_buffer(data: &Data) -> Result<bool, DiscordBotError> {
+    debug!(
+        dm_discord_id = %data.dm_discord_id,
+        expiry_seconds = data.buffered_message_expiry_seconds,
+        "checking if buffered messages should flush"
+    );
+
     let messages = {
         let guard = data.buffered_messages.lock().await;
         guard.clone()
@@ -221,8 +245,9 @@ async fn should_flush_buffer(data: &Data) -> Result<bool, DiscordBotError> {
     Ok(elapsed.num_seconds() >= data.buffered_message_expiry_seconds as i64)
 }
 
+#[instrument(skip(ctx, data))]
 async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
-    debug!("Start to flush buffer");
+    info!("flushing buffered DM messages");
     let messages = {
         let mut messages = data.buffered_messages.lock().await;
         if messages.is_empty() {
@@ -257,24 +282,24 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
         )
         .await
     {
-        tracing::error!("LLM error: {}", e);
+        error!(error = %e, primary_author = %primary_author, "failed to store buffered dialogue");
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(send_err) = channel_id
             .say(ctx, format!("Error processing buffered messages: {}", e))
             .await
         {
-            tracing::error!("Failed to send error message: {}", send_err);
+            error!(error = %send_err, "failed to send error message");
         }
     }
 
     if let Err(e) = data.llm.lock().await.new_summary().await {
-        tracing::error!("LLM error: {}", e);
+        error!(error = %e, primary_author = %primary_author, "failed to generate summary after flush");
         let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
         if let Err(send_err) = channel_id
             .say(ctx, format!("Error processing buffered messages: {}", e))
             .await
         {
-            tracing::error!("Failed to send error message: {}", send_err);
+            error!(error = %send_err, "failed to send error message");
         }
     }
 
@@ -289,17 +314,19 @@ async fn flush_buffer(ctx: &serenity::Context, data: &Data) {
             // Send response back to channel
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(e) = channel_id.say(ctx, &response).await {
-                tracing::error!("Failed to send message: {}", e);
+                error!(error = %e, "failed to send response message");
+            } else {
+                info!(primary_author = %primary_author, response_len = response.len(), "sent buffered flush response");
             }
         }
         Err(e) => {
-            tracing::error!("LLM error: {}", e);
+            error!(error = %e, primary_author = %primary_author, "failed to request LLM response for buffered messages");
             let channel_id = serenity::ChannelId::new(data.channel_id.parse().unwrap());
             if let Err(send_err) = channel_id
                 .say(ctx, format!("Error processing buffered messages: {}", e))
                 .await
             {
-                tracing::error!("Failed to send error message: {}", send_err);
+                error!(error = %send_err, "failed to send error message");
             }
         }
     }
@@ -312,6 +339,7 @@ fn start_buffer_check_task(
 ) {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(data.buffer_check_interval_seconds)); // Check every configured seconds
+        info!(buffer_check_interval_seconds = data.buffer_check_interval_seconds, "started buffer check task");
 
         loop {
             tokio::select! {
@@ -320,13 +348,14 @@ fn start_buffer_check_task(
                     let should_flush = should_flush_buffer(&data).await;
                     match should_flush {
                         Ok(true) => {
+                            info!("buffer expiry reached; flushing");
                             flush_buffer(&ctx, &data).await;
                         }
                         Ok(false) => {
                             // No action needed
                         }
                         Err(e) => {
-                            tracing::error!("Error checking buffer flush condition: {}", e);
+                            error!(error = %e, "error checking buffer flush condition");
                         }
                     }
                 }
@@ -335,13 +364,14 @@ fn start_buffer_check_task(
                     let should_flush = should_flush_buffer(&data).await;
                     match should_flush {
                         Ok(true) => {
+                            info!("manual flush triggered; flushing");
                             flush_buffer(&ctx, &data).await;
                         }
                         Ok(false) => {
                             // No action needed
                         }
                         Err(e) => {
-                            tracing::error!("Error checking buffer flush condition: {}", e);
+                            error!(error = %e, "error checking buffer flush condition");
                         }
                     }
                 }

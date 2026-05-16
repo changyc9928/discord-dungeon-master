@@ -517,7 +517,6 @@ mod test {
                     character_sheet_service: character_sheet_service.clone(),
                     cached_context: HashMap::new(),
                     dm_discord_id: "1483098634601107476".to_owned(),
-                    folder_path: "./prompts".to_string(),
                     compile_trigger: 4,
                     tool_service,
                     base_url: None,

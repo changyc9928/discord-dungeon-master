@@ -12,15 +12,17 @@ services:
     build:
       context: .
       target: final
+    user:
+      root
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./config/config.yaml:/app/config.yaml
+      - ./config:/app/config
       - ./migrations:/app/db/migrations
       - ./prompts:/app/prompts
-      - ./docs:/docs
-      - ./logs:/logs
+      - ./docs:/app/docs
+      - ./logs:/app/logs
     environment:
       - DATABASE__HOST=db
       - DATABASE__PORT=5432

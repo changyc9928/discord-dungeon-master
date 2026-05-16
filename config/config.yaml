@@ -2,7 +2,7 @@ service-name: discord-dungeon-master-service
 
 server:
   host: localhost
-  port: 8001
+  port: 30000
 
 database:
   host: localhost
@@ -29,7 +29,5 @@ buffered-message-expiry-seconds: 5
 buffer-check-interval-seconds: 2
 
 compile-trigger: 10
-
-prompts-folder-path: "/app/prompts"
 
 retry-attempt: 20

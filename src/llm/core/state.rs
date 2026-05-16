@@ -45,7 +45,6 @@ pub struct LlmCore {
     pub tool_service: Arc<ToolService>,
     pub cached_context: HashMap<String, Cache>,
     pub dm_discord_id: String,
-    pub folder_path: String,
     pub compile_trigger: usize,
     pub base_url: Option<String>,
     pub retry_attempt: usize,
@@ -58,7 +57,6 @@ impl LlmCore {
         story_service: Arc<StoryService>,
         character_sheet_service: Arc<CharacterSheetService>,
         dm_discord_id: String,
-        folder_path: String,
         compile_trigger: usize,
         retry_attempt: usize,
         base_url: Option<String>,
@@ -70,7 +68,6 @@ impl LlmCore {
             tool_service,
             cached_context: HashMap::new(),
             dm_discord_id,
-            folder_path,
             compile_trigger,
             retry_attempt,
             base_url,
@@ -78,10 +75,7 @@ impl LlmCore {
     }
 
     pub fn load_prompt(&self, file: &str) -> Result<String, LlmError> {
-        Ok(fs::read_to_string(format!(
-            "{}/{}",
-            self.folder_path, file
-        ))?)
+        Ok(fs::read_to_string(format!("prompts/{}", file))?)
     }
 
     pub fn user_prompt(&self, discord_user_id: &str) -> String {

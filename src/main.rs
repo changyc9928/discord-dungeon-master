@@ -6,12 +6,13 @@ use tokio::{
     signal::unix::{SignalKind, signal},
     sync::Mutex,
 };
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
 
 use crate::{
     character::{repository::CharacterSheetRepository, service::CharacterSheetService},
-    config::{AiDmConfig, ServiceConfig},
+    config::{AiDmConfig, LoggingConfig, ServiceConfig},
     llm::{Anthropic, DeepSeek, Gemini, Llm, Ollama, OpenAi, OpenRouter, Qwen, routes::LlmApi},
     openapi::LlmOpenApi,
     pg_pool::{TestPgPool, TestPgPoolConfig},
@@ -34,36 +35,27 @@ pub mod tool;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // logs/app.log
-    let file_appender = tracing_appender::rolling::daily("logs", "app.log");
+    let service_config: ServiceConfig<AiDmConfig> = ServiceConfig::load("config/config.yaml")?;
+    let _guard = init_tracing(&service_config.logging)?;
 
-    // non_blocking prevents file IO from blocking your async/runtime threads
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-
-    tracing_subscriber::registry()
-        .with(filter)
-        // stdout layer
-        .with(fmt::layer().with_target(true).with_writer(std::io::stdout))
-        // file layer
-        .with(
-            fmt::layer()
-                .with_ansi(false) // disable colors in files
-                .with_writer(non_blocking),
-        )
-        .try_init()?;
+    tracing::info!(service_name = %service_config.service_name, "service configuration loaded");
+    tracing::info!(otlp_endpoint = %service_config.tracing.otlp_endpoint, "tracing settings loaded");
 
     let openapi = LlmOpenApi::openapi();
     let output = "docs/openapi.yaml";
     std::fs::write(output, serde_yaml::to_string(&openapi)?)?;
-    println!("OpenAPI spec written to {output}");
+    tracing::info!("OpenAPI spec written to {output}");
 
-    let service_config: ServiceConfig<AiDmConfig> = ServiceConfig::load("/app/config.yaml")?;
     let db_config = service_config
         .database
         .as_ref()
         .ok_or_else(|| crate::error::Error::MissingConfig("database"))?;
+    tracing::info!(
+        database_host = %db_config.host,
+        database_name = %db_config.db_name,
+        "initializing database pool"
+    );
+
     let pg_pool = TestPgPool::init(TestPgPoolConfig {
         migrations: "/app/db/migrations".into(),
         db_name: db_config.db_name.clone(),
@@ -99,7 +91,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 story_service,
                 Arc::clone(&character_sheet_service),
                 service_config.config.dm_id.clone(),
-                service_config.config.prompts_folder_path,
                 service_config.config.compile_trigger,
                 service_config.config.base_url,
                 service_config.config.retry_attempt,
@@ -129,17 +120,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
         character_sheet_service: character_sheet_service.clone(),
     };
 
-    discord_bot::handler::start_bot(
-        &discord_token,
-        llm,
-        service_config.config.channel_id.clone(),
-        service_config.config.self_discord_id.clone(),
-        service_config.config.dm_id.clone(),
-        service_config.config.buffered_message_expiry_seconds,
-        service_config.config.buffer_check_interval_seconds,
-        character_sheet_service,
-    )
-    .await?;
+    tracing::info!(
+        provider = ?service_config.config.provider,
+        channel_id = %service_config.config.channel_id,
+        dm_id = %service_config.config.dm_id,
+        "starting discord bot"
+    );
+
+    let discord_task = tokio::spawn(async move {
+        discord_bot::handler::start_bot(
+            &discord_token,
+            llm,
+            service_config.config.channel_id.clone(),
+            service_config.config.self_discord_id.clone(),
+            service_config.config.dm_id.clone(),
+            service_config.config.buffered_message_expiry_seconds,
+            service_config.config.buffer_check_interval_seconds,
+            character_sheet_service,
+        )
+        .await
+    });
 
     let router = Router::new().merge(llm_api);
 
@@ -148,20 +148,51 @@ async fn main() -> Result<(), Box<dyn Error>> {
         service_config.server.port,
     ))
     .await?;
-    tokio::spawn(async move {
+    tracing::info!(
+        host = %service_config.server.host,
+        port = service_config.server.port,
+        "starting http server"
+    );
+    let http_task = tokio::spawn(async move {
         axum::serve(listener, router)
             .with_graceful_shutdown(shutdown_handler())
             .await
-    })
-    .await??;
+    });
+
+    let (discord_result, http_result) = tokio::try_join!(discord_task, http_task)?;
+
+    discord_result?;
+    http_result?;
 
     Ok(())
+}
+
+fn init_tracing(logging: &LoggingConfig) -> Result<WorkerGuard, Box<dyn Error>> {
+    std::fs::create_dir_all("logs")?;
+
+    let file_appender = tracing_appender::rolling::daily("logs", "app.log");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| logging.env_filter());
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_target(true).with_writer(std::io::stdout))
+        .with(
+            fmt::layer()
+                .with_ansi(false)
+                .with_target(true)
+                .with_writer(non_blocking),
+        )
+        .try_init()?;
+
+    Ok(guard)
 }
 
 async fn shutdown_handler() {
     let ctrl_c = async {
         if let Err(error) = tokio::signal::ctrl_c().await {
-            tracing::error!("Failed to install CTRL-C signal handler: {error}");
+            tracing::error!(error = %error, "failed to install CTRL-C signal handler");
             std::process::exit(1);
         }
     };
@@ -169,13 +200,13 @@ async fn shutdown_handler() {
         match signal(SignalKind::terminate()) {
             Ok(mut signal) => signal.recv().await,
             Err(error) => {
-                tracing::error!("Failed to install SIGTERM handler: {error}");
+                tracing::error!(error = %error, "failed to install SIGTERM handler");
                 std::process::exit(1);
             }
         }
     };
     tokio::select! {
-        _ = ctrl_c => tracing::info!("Recieved CTRL-C. Shutting down..."),
-        _ = terminate => tracing::info!("Recieved SIGTERM. Shutting down..."),
+        _ = ctrl_c => tracing::info!(signal = "ctrl_c", "shutting down"),
+        _ = terminate => tracing::info!(signal = "sigterm", "shutting down"),
     }
 }
